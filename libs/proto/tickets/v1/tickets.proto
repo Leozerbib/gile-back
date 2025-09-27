@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+package tickets.v1;
+
+import "google/protobuf/timestamp.proto";
+import "profile/v1/profile.proto";
+import "sprints/v1/sprints.proto";
+import "labels/v1/labels.proto";
+
+message AuthenticatedUser {
+  string user_id = 1;
+  string email = 2;
+  string created_at = 3;
+  string updated_at = 4;
+  bool email_confirmed = 5;
+  string last_sign_in_at = 6;
+}
+
+service Tickets {
+  rpc Create(CreateRequest) returns (CreateResponse);
+  rpc FindAll(FindAllRequest) returns (FindAllResponse);
+  rpc FindById(FindByIdRequest) returns (FindByIdResponse);
+  rpc Update(UpdateRequest) returns (UpdateResponse);
+  rpc Remove(RemoveRequest) returns (RemoveResponse);
+}
+
+message CreateRequest {
+  AuthenticatedUser user = 1;
+  Ticket ticket = 2;
+}
+
+message CreateResponse {
+  Ticket ticket = 1;
+}
+
+message FindAllRequest {
+  AuthenticatedUser user = 1;
+  FindAllFilters filters = 2;
+}
+
+message FindAllFilters {
+  optional int32 project_id = 1;
+  optional int32 sprint_id = 2;
+  repeated int32 sprint_ids = 3;
+  optional string status = 4;
+  repeated string status_in = 5;
+  optional string priority = 6;
+  repeated string priority_in = 7;
+  optional string category = 8;
+  repeated string category_in = 9;
+  repeated string assign_to_in = 10;
+  repeated int32 label_ids = 11;
+  optional string sort = 12;
+  optional string order = 13;
+  optional int32 skip = 14;
+  optional int32 take = 15;
+  optional string search = 16;
+}
+
+message FindAllResponse {
+  repeated Ticket items = 1;
+  int32 total = 2;
+  int32 skip = 3;
+  int32 take = 4;
+}
+
+message FindByIdRequest {
+  AuthenticatedUser user = 1;
+  string id = 2;
+}
+
+message FindByIdResponse {
+  optional Ticket ticket = 1;
+}
+
+message UpdateRequest {
+  AuthenticatedUser user = 1;
+  string id = 2;
+  Ticket ticket = 3;
+}
+
+message UpdateResponse {
+  Ticket ticket = 1;
+}
+
+message RemoveRequest {
+  AuthenticatedUser user = 1;
+  string id = 2;
+}
+
+message RemoveResponse {
+  bool success = 1;
+}
+
+message Ticket {
+  int32 id = 1;
+  repeated int32 task_id = 2;
+  optional int32 sprint_id = 3;
+  int32 project_id = 4;
+  optional string assigned_to = 5;
+  optional int32 parent_ticket_id = 6;
+  string ticket_number = 7;
+  string title = 8;
+  optional string description = 9;
+  string status = 10;
+  string priority = 11;
+  string category = 12;
+  int32 story_points = 13;
+  optional float estimated_hours = 14;
+  optional float actual_hours = 15;
+  optional string due_date = 16;
+  optional string completed_at = 17;
+  optional string implementation_notes = 18;
+  optional string testing_notes = 19;
+  string created_at = 20;
+  optional string updated_at = 21;
+  string created_by = 22;
+  string updated_by = 23;
+  optional Project project = 24;
+  optional Sprint sprint = 25;
+  optional ProfileOverview created_by_user = 26;
+  optional ProfileOverview updated_by_user = 27;
+  optional ProfileOverview assigned_to_user = 28;
+  repeated Label labels = 29;
+}
+
+message Project {
+  int32 id = 1;
+  string name = 2;
+  optional string slug = 3;
+}
+
+message Sprint {
+  int32 id = 1;
+  string name = 2;
+  optional int32 version = 3;
+}
+
+message Label {
+  int32 id = 1;
+  string name = 2;
+}

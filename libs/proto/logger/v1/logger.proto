@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package logger.v1;
+
+// Log levels supported by the logger service
+enum LogLevel {
+  LOG_LEVEL_UNSPECIFIED = 0;
+  DEBUG = 1;
+  INFO = 2;
+  WARN = 3;
+  ERROR = 4;
+  FATAL = 5;
+}
+
+// A log entry pushed from a microservice to the logger service
+message LogEntry {
+  // ISO8601 string (e.g., 2025-09-22T12:34:56.789Z)
+  string timestamp = 1;
+  LogLevel level = 2;
+  string service = 3;      // name of the microservice
+  string func = 4;         // function or scope name
+  string message = 5;      // human-readable message
+  string data_json = 6;    // optional JSON payload (stringified)
+}
+
+message LogAck {
+  bool ok = 1;
+}
+
+service Logger {
+  rpc WriteLog (LogEntry) returns (LogAck) {}
+}

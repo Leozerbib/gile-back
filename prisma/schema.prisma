@@ -1,0 +1,1036 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["bibz-agile"]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model activity_logs {
+  id          BigInt    @id @default(autoincrement())
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  user_id     String    @db.Uuid
+  action      String    @db.VarChar(50)
+  entity_type String    @db.VarChar(50)
+  entity_id   Int
+  project_id  Int?
+  ticket_id   Int?
+  metadata    Json?     @default("{}")
+  ip_address  String?   @db.Inet
+  user_agent  String?
+  session_id  String?   @db.Uuid
+  project     projects? @relation(fields: [project_id], references: [id], onDelete: Cascade, map: "fk_activity_project")
+  ticket      tickets?  @relation(fields: [ticket_id], references: [id], onDelete: Cascade, map: "fk_activity_ticket")
+  profile     profiles  @relation(fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_activity_user")
+
+  @@index([action], map: "idx_activity_action")
+  @@index([created_at(sort: Desc)], map: "idx_activity_created")
+  @@index([entity_type, entity_id], map: "idx_activity_entity")
+  @@index([action, entity_type], map: "idx_activity_logs_action_entity")
+  @@index([user_id, created_at(sort: Desc)], map: "idx_activity_logs_user_created")
+  @@index([project_id], map: "idx_activity_project")
+  @@index([session_id], map: "idx_activity_session")
+  @@index([ticket_id], map: "idx_activity_ticket")
+  @@index([user_id], map: "idx_activity_user")
+  @@schema("bibz-agile")
+}
+
+model agent {
+  id              BigInt            @id @default(autoincrement())
+  agent_name_code String
+  version         Int               @default(1)
+  display_name    String            @db.VarChar(255)
+  description     String?
+  agent_type      agent_type_enum
+  status          agent_status_enum @default(DRAFT)
+  published_at    DateTime?         @db.Timestamptz(6)
+  created_at      DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime          @default(now()) @db.Timestamptz(6)
+  usage           model_usage[]
+  prompt          prompt[]
+
+  @@schema("bibz-agile")
+}
+
+model agent_task_definitions {
+  id              Int       @id @default(autoincrement())
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @db.Timestamp(6)
+  name            String    @unique
+  description     String?
+  ui_color        String?
+  config_data     Json?     @default("{}")
+  created_by      String?   @db.Uuid
+  updated_by      String?   @db.Uuid
+  created_by_user profiles? @relation("agent_task_definitions_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_agent_task_def_created_by")
+  updated_by_user profiles? @relation("agent_task_definitions_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_agent_task_def_updated_by")
+  chat            chat[]
+
+  @@schema("bibz-agile")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model chat {
+  id                       Int                     @id(map: "Chat-step_pkey") @default(autoincrement())
+  created_at               DateTime?               @default(now()) @db.Timestamp(6)
+  updated_at               DateTime?               @db.Timestamp(6)
+  session_id               String?                 @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title                    String?
+  conversation_type_id     Int
+  metadata                 Json?
+  created_by               String?                 @db.Uuid
+  updated_by               String?                 @db.Uuid
+  projectid                Int?
+  workflow_definition_id   Int?
+  completion_definition_id Int?
+  agent_task_definition_id Int?
+  chatbot_config_id        Int?
+  workspace_id             String                  @db.Uuid
+  workspace                workspaces              @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_workspaces_fk")
+  agent_task_definitions   agent_task_definitions? @relation(fields: [agent_task_definition_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_chat_agent_task_def")
+  chatbot_configurations   chatbot_configurations? @relation(fields: [chatbot_config_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_chat_chatbot_conf")
+  completion_definitions   completion_definitions? @relation(fields: [completion_definition_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_chat_completion_def")
+  conversation_types       conversation_types      @relation(fields: [conversation_type_id], references: [id], onUpdate: NoAction, map: "fk_chat_conversation_type")
+  created_by_user          profiles?               @relation("chat_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chat_created_by")
+  updated_by_user          profiles?               @relation("chat_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chat_updated_by")
+  workflow_definitions     workflow_definitions?   @relation(fields: [workflow_definition_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_chat_workflow_def")
+  message                  message[]
+
+  @@index([agent_task_definition_id], map: "idx_chat_agent_task_definition_id")
+  @@index([chatbot_config_id], map: "idx_chat_chatbot_config_id")
+  @@index([completion_definition_id], map: "idx_chat_completion_definition_id")
+  @@index([workflow_definition_id], map: "idx_chat_workflow_definition_id")
+  @@schema("bibz-agile")
+}
+
+model chatbot_configurations {
+  id              Int       @id @default(autoincrement())
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @db.Timestamp(6)
+  name            String    @unique
+  description     String?
+  ui_color        String?
+  config_data     Json?     @default("{}")
+  created_by      String?   @db.Uuid
+  updated_by      String?   @db.Uuid
+  chat            chat[]
+  created_by_user profiles? @relation("chatbot_configurations_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chatbot_conf_created_by")
+  updated_by_user profiles? @relation("chatbot_configurations_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chatbot_conf_updated_by")
+
+  @@schema("bibz-agile")
+}
+
+model completion_definitions {
+  id              Int       @id @default(autoincrement())
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @db.Timestamp(6)
+  name            String    @unique
+  description     String?
+  ui_color        String?
+  config_data     Json?     @default("{}")
+  created_by      String?   @db.Uuid
+  updated_by      String?   @db.Uuid
+  chat            chat[]
+  created_by_user profiles? @relation("completion_definitions_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_completion_def_created_by")
+  updated_by_user profiles? @relation("completion_definitions_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_completion_def_updated_by")
+
+  @@schema("bibz-agile")
+}
+
+model conversation_types {
+  id          Int       @id @default(autoincrement())
+  created_at  DateTime  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @db.Timestamp(6)
+  name        String    @unique
+  description String?
+  ui_color    String?
+  metadata    Json?
+  chat        chat[]
+
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model epics {
+  id              Int          @id @default(autoincrement())
+  created_at      DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?    @db.Timestamptz(6)
+  created_by      String?      @db.Uuid
+  updated_by      String?      @db.Uuid
+  project_id      Int
+  title           String       @db.VarChar(255)
+  slug            String       @db.VarChar(255)
+  description     String?
+  category        EpicCategory
+  status          EpicStatus   @default(TODO)
+  priority        Int          @default(0) @db.SmallInt
+  start_date      DateTime?    @db.Date
+  end_date        DateTime?    @db.Date
+  progress        Int          @default(0) @db.SmallInt
+  project         projects     @relation(fields: [project_id], references: [id], onDelete: Cascade, map: "fk_epics_project")
+  created_by_user profiles?    @relation("epics_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user profiles?    @relation("epics_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  tasks           tasks[]
+
+  @@unique([project_id, slug], map: "uk_epics_project_slug")
+  @@index([category], map: "idx_epics_category")
+  @@index([start_date, end_date], map: "idx_epics_dates")
+  @@index([priority(sort: Desc)], map: "idx_epics_priority")
+  @@index([progress], map: "idx_epics_progress")
+  @@index([project_id], map: "idx_epics_project")
+  @@index([status], map: "idx_epics_status")
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_epics_title_trgm", type: Gin)
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model labels {
+  id              Int             @id @default(autoincrement())
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?       @db.Timestamptz(6)
+  created_by      String?         @db.Uuid
+  updated_by      String?         @db.Uuid
+  name            String          @db.VarChar(100)
+  color           String          @default("#808080") @db.VarChar(7)
+  description     String?
+  workspace_id    String          @db.Uuid
+  workspace       workspaces      @relation(fields: [workspace_id], references: [id], onDelete: Cascade, map: "fk_labels_workspace")
+  created_by_user profiles?       @relation("labels_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user profiles?       @relation("labels_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  tickets         ticket_labels[]
+
+  @@unique([name, workspace_id], map: "uk_labels_name_workspace")
+  @@index([color], map: "idx_labels_color")
+  @@index([name], map: "idx_labels_name")
+  @@index([workspace_id], map: "idx_labels_workspace")
+  @@schema("bibz-agile")
+}
+
+model languages {
+  id          Int       @id @default(autoincrement())
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime? @db.Timestamptz(6)
+  name        String    @unique @db.VarChar(100)
+  icon        String?   @db.VarChar(100)
+  color       String?   @db.VarChar(7)
+  description String?
+  stacks      stacks[]
+
+  @@index([name], map: "idx_languages_name")
+  @@schema("bibz-agile")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model message {
+  id               Int       @id(map: "chat_copy_pkey") @default(autoincrement())
+  created_at       DateTime? @default(now()) @db.Timestamp(6)
+  updated_at       DateTime? @db.Timestamp(6)
+  chat_id          Int
+  message_role     String
+  raw_message_json Json?
+  markdown         String?
+  step             String?   @default("analyse")
+  status           String?
+  response_time_ms Int?
+  error_message    String?
+  created_by       String?   @db.Uuid
+  updated_by       String?   @db.Uuid
+  message          String?
+  chat             chat      @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_message_chat")
+  created_by_user  profiles? @relation("message_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_created_by")
+  updated_by_user  profiles? @relation("message_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_updated_by")
+
+  @@index([message_role], map: "idx_message_message_role")
+  @@index([status], map: "idx_message_status")
+  @@schema("bibz-agile")
+}
+
+model model_usage {
+  id                BigInt     @id @default(autoincrement())
+  created_at        DateTime   @default(now()) @db.Timestamptz(6)
+  model_token_count Int?
+  user_token_count  Int?
+  cache_token_count Int?
+  total_token_count Int?
+  model             String?    @db.VarChar
+  from              String?    @db.VarChar
+  user_id           String     @db.Uuid
+  workspace_id      String     @db.Uuid
+  project_id        Int?
+  agent_id          BigInt
+  agent             agent      @relation(fields: [agent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "model_usage_agent_fk")
+  profile           profiles   @relation(fields: [user_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "model_usage_profiles_fk")
+  project           projects?  @relation(fields: [project_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "model_usage_projects_fk")
+  workspace         workspaces @relation(fields: [workspace_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "model_usage_workspaces_fk")
+
+  @@schema("bibz-agile")
+}
+
+model profiles {
+  id                                            BigInt                      @id @default(autoincrement())
+  created_at                                    DateTime                    @default(now()) @db.Timestamptz(6)
+  username                                      String                      @unique @db.VarChar
+  user_id                                       String                      @unique @db.Uuid
+  updated_at                                    DateTime?                   @db.Timestamptz(6)
+  first_name                                    String?                     @db.VarChar(100)
+  last_name                                     String?                     @db.VarChar(100)
+  avatar_url                                    String?                     @db.VarChar(500)
+  activityLogs                                  activity_logs[]
+  agent_task_definitions_created_by_to_profiles agent_task_definitions[]    @relation("agent_task_definitions_created_by_to_profiles")
+  agent_task_definitions_updated_by_to_profiles agent_task_definitions[]    @relation("agent_task_definitions_updated_by_to_profiles")
+  chat_created_by_to_profiles                   chat[]                      @relation("chat_created_by_to_profiles")
+  chat_updated_by_to_profiles                   chat[]                      @relation("chat_updated_by_to_profiles")
+  chatbot_configurations_created_by_to_profiles chatbot_configurations[]    @relation("chatbot_configurations_created_by_to_profiles")
+  chatbot_configurations_updated_by_to_profiles chatbot_configurations[]    @relation("chatbot_configurations_updated_by_to_profiles")
+  completion_definitions_created_by_to_profiles completion_definitions[]    @relation("completion_definitions_created_by_to_profiles")
+  completion_definitions_updated_by_to_profiles completion_definitions[]    @relation("completion_definitions_updated_by_to_profiles")
+  epics_created_by_to_profiles                  epics[]                     @relation("epics_created_by_to_profiles")
+  epics_updated_by_to_profiles                  epics[]                     @relation("epics_updated_by_to_profiles")
+  labels_created_by_to_profiles                 labels[]                    @relation("labels_created_by_to_profiles")
+  labels_updated_by_to_profiles                 labels[]                    @relation("labels_updated_by_to_profiles")
+  message_created_by_to_profiles                message[]                   @relation("message_created_by_to_profiles")
+  message_updated_by_to_profiles                message[]                   @relation("message_updated_by_to_profiles")
+  model_usage                                   model_usage[]
+  project_teams                                 project_teams[]
+  projects_created_by_to_profiles               projects[]                  @relation("projects_created_by_to_profiles")
+  projects_project_manager_id_to_profiles       projects[]                  @relation("projects_project_manager_id_to_profiles")
+  projects_updated_by_to_profiles               projects[]                  @relation("projects_updated_by_to_profiles")
+  sprints_created_by_to_profiles                sprints[]                   @relation("sprints_created_by_to_profiles")
+  sprints_updated_by_to_profiles                sprints[]                   @relation("sprints_updated_by_to_profiles")
+  stacks_created_by_to_profiles                 stacks[]                    @relation("stacks_created_by_to_profiles")
+  stacks_updated_by_to_profiles                 stacks[]                    @relation("stacks_updated_by_to_profiles")
+  tasks_created_by_to_profiles                  tasks[]                     @relation("tasks_created_by_to_profiles")
+  tasks_updated_by_to_profiles                  tasks[]                     @relation("tasks_updated_by_to_profiles")
+  team_members                                  team_members[]
+  teams_created_by_to_profiles                  teams[]                     @relation("teams_created_by_to_profiles")
+  teams_updated_by_to_profiles                  teams[]                     @relation("teams_updated_by_to_profiles")
+  ticket_comments_author_id_to_profiles         ticket_comments[]           @relation("ticket_comments_author_id_to_profiles")
+  ticket_comments_created_by_to_profiles        ticket_comments[]           @relation("ticket_comments_created_by_to_profiles")
+  ticket_comments_updated_by_to_profiles        ticket_comments[]           @relation("ticket_comments_updated_by_to_profiles")
+  ticket_labels                                 ticket_labels[]
+  tickets_created_by_to_profiles                tickets[]                   @relation("tickets_created_by_to_profiles")
+  tickets_updated_by_to_profiles                tickets[]                   @relation("tickets_updated_by_to_profiles")
+  tickets_assigned_to_to_profiles               tickets[]                   @relation("tickets_assigned_to_to_profiles")
+  user_notification_settings                    user_notification_settings?
+  user_preferences                              user_preferences?
+  workflow_definitions_created_by_to_profiles   workflow_definitions[]      @relation("workflow_definitions_created_by_to_profiles")
+  workflow_definitions_updated_by_to_profiles   workflow_definitions[]      @relation("workflow_definitions_updated_by_to_profiles")
+  workspace_invitations_invited_by_to_profiles  workspace_invitations[]     @relation("workspace_invitations_invited_by_to_profiles")
+  workspace_invitations_user_id_to_profiles     workspace_invitations[]     @relation("workspace_invitations_user_id_to_profiles")
+  workspace_members_created_by_to_profiles      workspace_members[]         @relation("workspace_members_created_by_to_profiles")
+  workspace_members_updated_by_to_profiles      workspace_members[]         @relation("workspace_members_updated_by_to_profiles")
+  workspace_members                             workspace_members[]
+  workspaces_created_by_to_profiles             workspaces[]                @relation("workspaces_created_by_to_profiles")
+  workspaces                                    workspaces[]
+  workspaces_updated_by_to_profiles             workspaces[]                @relation("workspaces_updated_by_to_profiles")
+
+  @@schema("bibz-agile")
+}
+
+model project_teams {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  created_by      String?   @db.Uuid
+  project_id      Int
+  team_id         String    @db.Uuid
+  project         projects  @relation(fields: [project_id], references: [id], onDelete: Cascade, map: "fk_project_teams_project")
+  team            teams     @relation(fields: [team_id], references: [id], onDelete: Cascade, map: "fk_project_teams_team")
+  created_by_user profiles? @relation(fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+
+  @@index([project_id], map: "idx_project_teams_project")
+  @@index([team_id], map: "idx_project_teams_team")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model projects {
+  id                 Int             @id @default(autoincrement())
+  created_at         DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?       @db.Timestamptz(6)
+  created_by         String?         @db.Uuid
+  updated_by         String?         @db.Uuid
+  workspace_id       String          @db.Uuid
+  project_manager_id String?         @db.Uuid
+  name               String          @db.VarChar(255)
+  slug               String          @db.VarChar(255)
+  description        String?
+  full_description   String?
+  start_date         DateTime?       @db.Date
+  end_date           DateTime?       @db.Date
+  actual_end_date    DateTime?       @db.Date
+  status             ProjectStatus   @default(TODO)
+  priority           ProjectPriority @default(MEDIUM)
+  progress           Int             @default(0) @db.SmallInt
+  is_archived        Boolean         @default(false)
+  is_public          Boolean         @default(false)
+  settings           Json?           @default("{}")
+  custom_fields      Json?           @default("{}")
+  activityLogs       activity_logs[]
+  epics              epics[]
+  usage              model_usage[]
+  teams              project_teams[]
+  created_by_user    profiles?       @relation("projects_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  manager            profiles?       @relation("projects_project_manager_id_to_profiles", fields: [project_manager_id], references: [user_id], map: "fk_projects_manager")
+  updated_by_user    profiles?       @relation("projects_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  workspace          workspaces      @relation(fields: [workspace_id], references: [id], onDelete: Cascade, map: "fk_projects_workspace")
+  sprints            sprints[]
+  stacks             stacks[]
+  tickets            tickets[]
+
+  @@unique([workspace_id, slug], map: "uk_projects_workspace_slug")
+  @@index([is_archived], map: "idx_projects_archived")
+  @@index([created_at(sort: Desc)], map: "idx_projects_created_at")
+  @@index([start_date, end_date], map: "idx_projects_dates")
+  @@index([project_manager_id], map: "idx_projects_manager")
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_projects_name_trgm", type: Gin)
+  @@index([priority], map: "idx_projects_priority")
+  @@index([progress], map: "idx_projects_progress")
+  @@index([status], map: "idx_projects_status")
+  @@index([workspace_id], map: "idx_projects_workspace")
+  @@schema("bibz-agile")
+}
+
+model prompt {
+  id           BigInt              @id @default(autoincrement())
+  prompt_code  String
+  version      Int                 @default(1)
+  creator_type prompt_creator_type
+  part_type    prompt_part_type
+  role_type    prompt_role_type
+  content      String
+  description  String?
+  status       prompt_status_type  @default(ACTIVE)
+  created_at   DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime            @default(now()) @db.Timestamptz(6)
+  agent_id     BigInt
+  updatable    Boolean             @default(false)
+  workspace_id String?             @db.Uuid
+  agent        agent               @relation(fields: [agent_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "prompt_agent_fk")
+  workspace    workspaces?         @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "prompt_workspaces_fk")
+
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model sprints {
+  id                  Int          @id @default(autoincrement())
+  created_at          DateTime?    @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime?    @db.Timestamptz(6)
+  created_by          String?      @db.Uuid
+  updated_by          String?      @db.Uuid
+  project_id          Int
+  name                String       @db.VarChar(255)
+  slug                String?      @db.VarChar(255)
+  description         String?
+  status              SprintStatus @default(PLANNED)
+  start_date          DateTime     @db.Date
+  end_date            DateTime?    @db.Date
+  actual_start_date   DateTime?    @db.Date
+  actual_end_date     DateTime?    @db.Date
+  velocity            Int?         @default(0) @db.SmallInt
+  capacity            Int?         @default(0) @db.SmallInt
+  version             Float        @default(0.1) @db.Real
+  review_notes        String?
+  retrospective_notes String?
+  created_by_user     profiles?    @relation("sprints_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user     profiles?    @relation("sprints_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  project             projects     @relation(fields: [project_id], references: [id], onDelete: Cascade, map: "fk_sprints_project")
+  tickets             tickets[]
+
+  @@unique([project_id, slug], map: "uk_sprints_project_slug")
+  @@index([start_date, end_date], map: "idx_sprints_dates")
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_sprints_name_trgm", type: Gin)
+  @@index([project_id, version], map: "idx_sprints_order")
+  @@index([project_id], map: "idx_sprints_project")
+  @@index([status], map: "idx_sprints_status")
+  @@schema("bibz-agile")
+}
+
+model stacks {
+  id              Int        @id @default(autoincrement())
+  created_at      DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?  @db.Timestamptz(6)
+  created_by      String?    @db.Uuid
+  updated_by      String?    @db.Uuid
+  project_id      Int
+  title           String     @db.VarChar(200)
+  type            StackType
+  language_id     Int?
+  version         String?    @db.VarChar(50)
+  description     String?
+  is_primary      Boolean    @default(false)
+  created_by_user profiles?  @relation("stacks_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, onUpdate: NoAction, map: "fk_stacks_created_by")
+  language        languages? @relation(fields: [language_id], references: [id], onUpdate: NoAction, map: "fk_stacks_language")
+  project         projects   @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_stacks_project")
+  updated_by_user profiles?  @relation("stacks_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, onUpdate: NoAction, map: "fk_stacks_updated_by")
+
+  @@index([language_id], map: "idx_stacks_language")
+  @@index([project_id], map: "idx_stacks_project")
+  @@index([type], map: "idx_stacks_type")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tasks {
+  id              Int        @id @default(autoincrement())
+  created_at      DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?  @db.Timestamptz(6)
+  created_by      String?    @db.Uuid
+  updated_by      String?    @db.Uuid
+  epic_id         Int
+  title           String     @db.VarChar(255)
+  description     String?
+  status          TaskStatus @default(TODO)
+  priority        Int        @default(0) @db.SmallInt
+  estimated_hours Decimal?   @db.Decimal(5, 2)
+  actual_hours    Decimal?   @default(0) @db.Decimal(5, 2)
+  due_date        DateTime?  @db.Date
+  completed_at    DateTime?  @db.Timestamptz(6)
+  created_by_user profiles?  @relation("tasks_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user profiles?  @relation("tasks_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  epic            epics      @relation(fields: [epic_id], references: [id], onDelete: Cascade, map: "fk_tasks_epic")
+
+  @@index([due_date], map: "idx_tasks_due_date")
+  @@index([epic_id], map: "idx_tasks_epic")
+  @@index([priority(sort: Desc)], map: "idx_tasks_priority")
+  @@index([status], map: "idx_tasks_status")
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_tasks_title_trgm", type: Gin)
+  @@schema("bibz-agile")
+}
+
+model team_members {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  created_by String?  @db.Uuid
+  team_id    String   @db.Uuid
+  user_id    String   @db.Uuid
+  role       TeamRole @default(MEMBER)
+  teams      teams    @relation(fields: [team_id], references: [id], onDelete: Cascade, map: "fk_team_members_team")
+  profile    profiles @relation(fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_team_members_user")
+
+  @@unique([team_id, user_id], map: "uk_team_members")
+  @@index([role], map: "idx_team_members_role")
+  @@index([team_id], map: "idx_team_members_team")
+  @@index([user_id], map: "idx_team_members_user")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model teams {
+  id              String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?       @db.Timestamptz(6)
+  created_by      String?         @db.Uuid
+  updated_by      String?         @db.Uuid
+  workspace_id    String          @db.Uuid
+  name            String          @db.VarChar(255)
+  slug            String          @db.VarChar(255)
+  description     String?
+  avatar_url      String?         @db.VarChar(500)
+  is_active       Boolean         @default(true)
+  teams           project_teams[]
+  members         team_members[]
+  created_by_user profiles?       @relation("teams_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user profiles?       @relation("teams_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  workspace       workspaces      @relation(fields: [workspace_id], references: [id], onDelete: Cascade, map: "fk_teams_workspace")
+
+  @@unique([workspace_id, slug], map: "uk_teams_workspace_slug")
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_teams_name_trgm", type: Gin)
+  @@index([slug], map: "idx_teams_slug")
+  @@index([workspace_id], map: "idx_teams_workspace")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ticket_comments {
+  id              Int       @id @default(autoincrement())
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime? @db.Timestamptz(6)
+  created_by      String?   @db.Uuid
+  updated_by      String?   @db.Uuid
+  ticket_id       Int
+  author_id       String    @db.Uuid
+  content         String
+  is_internal     Boolean   @default(false)
+  mentioned_users String[]  @default([]) @db.Uuid
+  attachments     Json?     @default("[]")
+  author          profiles  @relation("ticket_comments_author_id_to_profiles", fields: [author_id], references: [user_id], map: "fk_comments_author")
+  ticket          tickets   @relation(fields: [ticket_id], references: [id], onDelete: Cascade, map: "fk_comments_ticket")
+  created_by_user profiles? @relation("ticket_comments_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user profiles? @relation("ticket_comments_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+
+  @@index([author_id], map: "idx_ticket_comments_author")
+  @@index([created_at(sort: Desc)], map: "idx_ticket_comments_created")
+  @@index([is_internal], map: "idx_ticket_comments_internal")
+  @@index([mentioned_users], map: "idx_ticket_comments_mentioned", type: Gin)
+  @@index([ticket_id], map: "idx_ticket_comments_ticket")
+  @@schema("bibz-agile")
+}
+
+model ticket_labels {
+  label_id        Int
+  ticket_id       Int
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  created_by      String?   @db.Uuid
+  created_by_user profiles? @relation(fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  label           labels    @relation(fields: [label_id], references: [id], onDelete: Cascade, map: "fk_ticket_labels_label")
+  ticket          tickets   @relation(fields: [ticket_id], references: [id], onDelete: Cascade, map: "fk_ticket_labels_ticket")
+
+  @@id([label_id, ticket_id], map: "pk_ticket_labels")
+  @@index([label_id], map: "idx_ticket_labels_label")
+  @@index([ticket_id], map: "idx_ticket_labels_ticket")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model tickets {
+  id                   Int               @id @default(autoincrement())
+  created_at           DateTime          @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime?         @db.Timestamptz(6)
+  created_by           String?           @db.Uuid
+  updated_by           String?           @db.Uuid
+  task_id              Int[]
+  sprint_id            Int?
+  project_id           Int?
+  assigned_to          String?           @db.Uuid
+  parent_ticket_id     Int?
+  ticket_number        String?           @unique(map: "uk_tickets_number") @db.VarChar(50)
+  title                String            @db.VarChar(255)
+  description          String?
+  status               TicketStatus      @default(TODO)
+  priority             TicketPriority    @default(MEDIUM)
+  category             TicketCategory    @default(TASK)
+  story_points         Int?              @db.SmallInt
+  estimated_hours      Decimal?          @db.Decimal(5, 2)
+  actual_hours         Decimal?          @default(0) @db.Decimal(5, 2)
+  due_date             DateTime?         @db.Date
+  completed_at         DateTime?         @db.Timestamptz(6)
+  implementation_notes String?
+  testing_notes        String?
+  activityLogs         activity_logs[]
+  comments             ticket_comments[]
+  labels               ticket_labels[]
+  created_by_user      profiles?         @relation("tickets_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user      profiles?         @relation("tickets_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  assigned_to_user     profiles?         @relation("tickets_assigned_to_to_profiles", fields: [assigned_to], references: [user_id], map: "fk_tickets_assigned_to")
+  ticket               tickets?          @relation("ticketsTotickets", fields: [parent_ticket_id], references: [id], onDelete: Cascade, map: "fk_tickets_parent")
+  other_tickets        tickets[]         @relation("ticketsTotickets")
+  project              projects?         @relation(fields: [project_id], references: [id], onDelete: Cascade, map: "fk_tickets_project")
+  sprint               sprints?          @relation(fields: [sprint_id], references: [id], map: "fk_tickets_sprint")
+
+  @@index([assigned_to], map: "idx_tickets_assigned")
+  @@index([category], map: "idx_tickets_category")
+  @@index([created_at(sort: Desc)], map: "idx_tickets_created_at")
+  @@index([due_date], map: "idx_tickets_due_date")
+  @@index([ticket_number], map: "idx_tickets_number")
+  @@index([parent_ticket_id], map: "idx_tickets_parent")
+  @@index([priority], map: "idx_tickets_priority")
+  @@index([project_id], map: "idx_tickets_project")
+  @@index([sprint_id], map: "idx_tickets_sprint")
+  @@index([sprint_id, status], map: "idx_tickets_sprint_status")
+  @@index([status], map: "idx_tickets_status")
+  @@index([status, priority], map: "idx_tickets_status_priority")
+  @@index([task_id], map: "idx_tickets_task")
+  @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_tickets_title_trgm", type: Gin)
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_notification_settings {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime? @db.Timestamptz(6)
+  created_by          String?   @db.Uuid
+  updated_by          String?   @db.Uuid
+  user_id             String    @unique(map: "uk_notification_settings_user") @db.Uuid
+  enabled             Boolean   @default(true)
+  muted_until         DateTime? @db.Timestamptz(6)
+  email_enabled       Boolean   @default(true)
+  push_enabled        Boolean   @default(true)
+  in_app_enabled      Boolean   @default(true)
+  sms_enabled         Boolean   @default(false)
+  on_ticket_assigned  Boolean   @default(true)
+  on_ticket_completed Boolean   @default(true)
+  on_ticket_comment   Boolean   @default(true)
+  on_ticket_due       Boolean   @default(true)
+  on_mentioned        Boolean   @default(true)
+  on_project_update   Boolean   @default(true)
+  on_sprint_start     Boolean   @default(true)
+  on_sprint_end       Boolean   @default(true)
+  daily_digest        Boolean   @default(false)
+  weekly_digest       Boolean   @default(true)
+  digest_time         String    @default("09:00") @db.VarChar(5)
+  profile             profiles  @relation(fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_notification_settings_user")
+
+  @@index([user_id], map: "idx_notification_settings_user")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model user_preferences {
+  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at           DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime? @db.Timestamptz(6)
+  created_by           String?   @db.Uuid
+  updated_by           String?   @db.Uuid
+  user_id              String    @unique(map: "uk_user_preferences_user") @db.Uuid
+  theme                ThemeMode @default(SYSTEM)
+  language             String    @default("fr") @db.VarChar(5)
+  timezone             String    @default("Europe/Paris") @db.VarChar(50)
+  date_format          String    @default("DD/MM/YYYY") @db.VarChar(20)
+  time_format          String    @default("24h") @db.VarChar(10)
+  compact_mode         Boolean   @default(false)
+  show_completed_tasks Boolean   @default(true)
+  default_view         String    @default("kanban") @db.VarChar(50)
+  items_per_page       Int       @default(25)
+  default_project_view String    @default("board") @db.VarChar(50)
+  favorite_projects    String[]  @default([])
+  pinned_projects      String[]  @default([])
+  dashboard_layout     Json?     @default("{}")
+  dashboard_widgets    Json?     @default("{}")
+  custom_shortcuts     Json?     @default("{}")
+  custom_filters       Json?     @default("{}")
+  profile              profiles  @relation(fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_user_preferences_user")
+
+  @@index([user_id], map: "idx_user_preferences_user")
+  @@schema("bibz-agile")
+}
+
+model workflow_definitions {
+  id              Int       @id @default(autoincrement())
+  created_at      DateTime  @default(now()) @db.Timestamp(6)
+  updated_at      DateTime? @db.Timestamp(6)
+  name            String    @unique(map: "idx_workflow_definitions_name")
+  description     String?
+  ui_color        String?
+  config_data     Json?     @default("{}")
+  created_by      String?   @db.Uuid
+  updated_by      String?   @db.Uuid
+  chat            chat[]
+  created_by_user profiles? @relation("workflow_definitions_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workflow_def_created_by")
+  updated_by_user profiles? @relation("workflow_definitions_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workflow_def_updated_by")
+
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model workspace_invitations {
+  id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at          DateTime   @default(now()) @db.Timestamptz(6)
+  created_by          String?    @db.Uuid
+  workspace_id        String     @db.Uuid
+  user_id             String     @db.Uuid
+  invited_by          String     @db.Uuid
+  role                UserRole   @default(VIEWER)
+  token               String     @unique(map: "uk_invitations_token") @default(dbgenerated("encode(gen_random_bytes(32), 'hex'::text)")) @db.VarChar(255)
+  expires_at          DateTime   @default(dbgenerated("(CURRENT_TIMESTAMP + '7 days'::interval)")) @db.Timestamptz(6)
+  accepted            Boolean    @default(false)
+  accepted_at         DateTime?  @db.Timestamptz(6)
+  invited_by_user     profiles   @relation("workspace_invitations_invited_by_to_profiles", fields: [invited_by], references: [user_id], onDelete: Cascade, map: "fk_invitations_invited_by")
+  user_id_to_profiles profiles   @relation("workspace_invitations_user_id_to_profiles", fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_invitations_user_id")
+  workspace           workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, map: "fk_invitations_workspace")
+
+  @@index([expires_at], map: "idx_invitations_expires")
+  @@index([token], map: "idx_invitations_token")
+  @@index([workspace_id], map: "idx_invitations_workspace")
+  @@index([user_id], map: "idx_invitations_user_id")
+  @@schema("bibz-agile")
+}
+
+model workspace_members {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at      DateTime   @default(now()) @db.Timestamptz(6)
+  created_by      String?    @db.Uuid
+  workspace_id    String     @db.Uuid
+  user_id         String     @db.Uuid
+  role            UserRole   @default(VIEWER)
+  is_active       Boolean    @default(true)
+  updated_by      String?    @db.Uuid
+  created_by_user profiles?  @relation("workspace_members_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workflow_def_created_by")
+  updated_by_user profiles?  @relation("workspace_members_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workflow_def_updated_by")
+  profile         profiles   @relation(fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_workspace_members_user")
+  workspace       workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, map: "fk_workspace_members_workspace")
+
+  @@unique([workspace_id, user_id], map: "uk_workspace_members")
+  @@index([role], map: "idx_workspace_members_role")
+  @@index([user_id], map: "idx_workspace_members_user")
+  @@index([workspace_id], map: "idx_workspace_members_workspace")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model workspace_settings {
+  id                         String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at                 DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at                 DateTime?  @db.Timestamptz(6)
+  created_by                 String?    @db.Uuid
+  updated_by                 String?    @db.Uuid
+  workspace_id               String     @unique(map: "uk_workspace_settings_workspace") @db.Uuid
+  default_project_visibility String?    @default("PRIVATE") @db.VarChar(50)
+  allow_guest_access         Boolean    @default(false)
+  auto_assign_tickets        Boolean    @default(false)
+  require_time_tracking      Boolean    @default(false)
+  default_sprint_duration    Int        @default(14)
+  email_notifications        Boolean    @default(true)
+  custom_fields              Json?      @default("{}")
+  workflow_states            Json?      @default("{}")
+  workspace                  workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, map: "fk_workspace_settings_workspace")
+
+  @@index([workspace_id], map: "idx_workspace_settings_workspace")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model workspaces {
+  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at      DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?               @db.Timestamptz(6)
+  created_by      String?                 @db.Uuid
+  updated_by      String?                 @db.Uuid
+  name            String                  @db.VarChar(255)
+  slug            String                  @unique(map: "uk_workspaces_slug") @db.VarChar(255)
+  description     String?
+  logo_url        String?                 @db.VarChar(500)
+  visibility      WorkspaceVisibility     @default(PRIVATE)
+  is_active       Boolean                 @default(true)
+  owner_id        String                  @db.Uuid
+  chats           chat[]
+  labels          labels[]
+  usage           model_usage[]
+  projects        projects[]
+  prompts         prompt[]
+  teams           teams[]
+  invitations     workspace_invitations[]
+  members         workspace_members[]
+  settings        workspace_settings?
+  created_by_user profiles?               @relation("workspaces_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspaces_created_by")
+  owner           profiles                @relation(fields: [owner_id], references: [user_id], map: "fk_workspaces_owner")
+  updated_by_user profiles?               @relation("workspaces_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspaces_updated_by")
+
+  @@index([created_at(sort: Desc)], map: "idx_workspaces_created_at")
+  @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_workspaces_name_trgm", type: Gin)
+  @@index([owner_id], map: "idx_workspaces_owner")
+  @@index([slug], map: "idx_workspaces_slug")
+  @@index([visibility], map: "idx_workspaces_visibility")
+  @@schema("bibz-agile")
+}
+
+enum EpicCategory {
+  SECURITY
+  PERFORMANCE
+  OPTIMIZATION
+  FEATURE
+  INFRASTRUCTURE
+  DOCUMENTATION
+  TESTING
+  REFACTORING
+  RESEARCH
+  DESIGN
+
+  @@schema("bibz-agile")
+}
+
+enum EpicStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELLED
+
+  @@schema("bibz-agile")
+}
+
+enum NotificationType {
+  EMAIL
+  IN_APP
+  PUSH
+  SMS
+
+  @@schema("bibz-agile")
+}
+
+enum ProjectPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@schema("bibz-agile")
+}
+
+enum ProjectStatus {
+  TODO
+  ACTIVE
+  STABLE
+  DONE
+  CANCELLED
+  TO_COMPLETE
+
+  @@schema("bibz-agile")
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+
+  @@schema("bibz-agile")
+}
+
+enum StackType {
+  FRONTEND
+  BACKEND
+  DATABASE
+  DEVOPS
+  TESTING
+  DOCUMENTATION
+
+  @@schema("bibz-agile")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+  CANCELLED
+
+  @@schema("bibz-agile")
+}
+
+enum TeamRole {
+  LEADER
+  MEMBER
+  CONTRIBUTOR
+  OBSERVER
+
+  @@schema("bibz-agile")
+}
+
+enum ThemeMode {
+  LIGHT
+  DARK
+  SYSTEM
+
+  @@schema("bibz-agile")
+}
+
+enum TicketCategory {
+  BUG
+  TASK
+  FEATURE
+
+  @@schema("bibz-agile")
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@schema("bibz-agile")
+}
+
+enum TicketStatus {
+  TODO
+  ACTIVE
+  IN_REVIEW
+  VALIDATED
+  PROD
+  CANCELLED
+  REFUSED
+
+  @@schema("bibz-agile")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  WORKSPACE_OWNER
+  WORKSPACE_ADMIN
+  PROJECT_MANAGER
+  DEVELOPER
+  DESIGNER
+  TESTER
+  VIEWER
+  GUEST
+
+  @@schema("bibz-agile")
+}
+
+enum WorkspaceVisibility {
+  PRIVATE
+  TEAM
+  PUBLIC
+
+  @@schema("bibz-agile")
+}
+
+enum agent_status_enum {
+  DRAFT
+  ACTIVE
+  DEPRECATED
+  ARCHIVED
+
+  @@schema("bibz-agile")
+}
+
+enum agent_type_enum {
+  FABRIC_DATA_AGENT
+  CUSTOM_AI_AGENT
+  CHATBOT
+  AUTOMATION_AGENT
+
+  @@schema("bibz-agile")
+}
+
+enum prompt_creator_type {
+  SYSTEM
+  USER
+
+  @@schema("bibz-agile")
+}
+
+enum prompt_part_type {
+  INTRODUCTION
+  OBJECTIVE
+  CONTEXT
+  CONSTRAINT
+  INSTRUCTION
+  EXAMPLE
+  FORMAT
+  RESPONSE_FORMAT
+  OUTPUT_SCHEMA
+  TOOLS
+  KNOWLEDGE_BASE
+  FALLBACK
+  PERSONALITY
+
+  @@schema("bibz-agile")
+}
+
+enum prompt_role_type {
+  CREATION
+  UPDATE
+  CREATION_UPDATE
+  INFO
+  GENERATION
+  CLASSIFICATION
+  SUMMARIZATION
+  TRANSLATION
+
+  @@schema("bibz-agile")
+}
+
+enum prompt_status_type {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+  DEPRECATED
+
+  @@schema("bibz-agile")
+}

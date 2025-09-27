@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package auth.v1;
+
+message SignInRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message AuthTokens {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_in = 3; // seconds until access token expiry
+  string token_type = 4; // e.g., Bearer
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message VerifyRequest {
+  string access_token = 1;
+}
+
+message VerifyResponse {
+  bool valid = 1;
+  string user_id = 2;
+  string email = 3;
+  string reason = 4; // error message when not valid
+}
+
+message SignUpRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message GetUserRequest {
+  string user_id = 1;
+}
+
+message UserInfo {
+  string id = 1;
+  string email = 2;
+  string created_at = 3;
+  string updated_at = 4;
+  bool email_confirmed = 5;
+  string last_sign_in_at = 6;
+}
+
+service Auth {
+  rpc SignIn (SignInRequest) returns (AuthTokens);
+  rpc SignUp (SignUpRequest) returns (AuthTokens);
+  rpc Refresh (RefreshRequest) returns (AuthTokens);
+  rpc Verify (VerifyRequest) returns (VerifyResponse);
+  rpc GetUser (GetUserRequest) returns (UserInfo);
+}

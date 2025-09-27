@@ -1,0 +1,164 @@
+syntax = "proto3";
+
+package sprints.v1;
+
+import "google/protobuf/timestamp.proto";
+import "profile/v1/profile.proto";
+
+service Sprints {
+  rpc Create(CreateRequest) returns (CreateResponse);
+  rpc FindAll(FindAllRequest) returns (FindAllResponse);
+  rpc FindById(FindByIdRequest) returns (FindByIdResponse);
+  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
+  rpc FindByProject(FindByProjectRequest) returns (FindByProjectResponse);
+  rpc FindActiveSprints(FindActiveSprintsRequest) returns (FindActiveSprintsResponse);
+  rpc Update(UpdateRequest) returns (UpdateResponse);
+  rpc Remove(RemoveRequest) returns (RemoveResponse);
+}
+
+message User {
+  string user_id = 1;
+  string email = 2;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp updated_at = 4;
+  bool email_confirmed = 5;
+}
+
+message CreateRequest {
+  profile.v1.ProfileOverview user = 1;
+  Sprint sprint = 2;
+}
+
+message CreateResponse {
+  Sprint sprint = 1;
+}
+
+message FindAllRequest {
+  profile.v1.ProfileOverview user = 1;
+  FindAllFilters filters = 2;
+}
+
+message FindAllFilters {
+  optional int32 project_id = 1;
+  optional string status = 2;
+  optional int32 skip = 3;
+  optional int32 take = 4;
+  optional string search = 5;
+  optional string sort = 6;
+  optional string order = 7;
+  optional string group_by = 8;
+  optional string sub_group_by = 9;
+  optional string date_granularity = 10;
+  optional string filter = 11;
+}
+
+message FindAllResponse {
+  repeated Sprint sprints = 1;
+  int32 total = 2;
+  int32 skip = 3;
+  int32 take = 4;
+}
+
+message FindByIdRequest {
+  profile.v1.ProfileOverview user = 1;
+  string id = 2;
+  optional bool include_metrics = 3;
+}
+
+message FindByIdResponse {
+  optional Sprint sprint = 1;
+}
+
+message GetOverviewRequest {
+  profile.v1.ProfileOverview user = 1;
+  int32 id = 2;
+  int32 skip = 3;
+  int32 take = 4;
+}
+
+message GetOverviewResponse {
+  repeated SprintOverview overview = 1;
+  int32 total = 2;
+  int32 skip = 3;
+  int32 take = 4;
+}
+
+message FindByProjectRequest {
+  profile.v1.ProfileOverview user = 1;
+  int32 project_id = 2;
+  optional bool full = 3;
+}
+
+message FindByProjectResponse {
+  repeated Sprint items = 1;
+  int32 total = 2;
+  int32 skip = 3;
+  int32 take = 4;
+}
+
+message FindActiveSprintsRequest {
+  profile.v1.ProfileOverview user = 1;
+  FindActiveSprintsFilters filters = 2;
+}
+
+message FindActiveSprintsFilters {
+  optional string workspace_id = 1;
+  repeated int32 project_ids = 2;
+  optional bool include_metrics = 3;
+}
+
+message FindActiveSprintsResponse {
+  repeated Sprint items = 1;
+  int32 total = 2;
+  int32 skip = 3;
+  int32 take = 4;
+}
+
+
+message UpdateRequest {
+  profile.v1.ProfileOverview user = 1;
+  string id = 2;
+  Sprint sprint = 3;
+}
+
+message UpdateResponse {
+  Sprint sprint = 1;
+}
+
+message RemoveRequest {
+  profile.v1.ProfileOverview user = 1;
+  string id = 2;
+}
+
+message RemoveResponse {
+  bool success = 1;
+}
+
+message Sprint {
+  int32 id = 1;
+  string name = 2;
+  optional string slug = 3;
+  optional string description = 4;
+  int32 project_id = 5;
+  google.protobuf.Timestamp start_date = 6;
+  google.protobuf.Timestamp end_date = 7;
+  optional google.protobuf.Timestamp actual_start_date = 8;
+  optional google.protobuf.Timestamp actual_end_date = 9;
+  optional int32 velocity = 10;
+  optional int32 capacity = 11;
+  double version = 12;
+  string status = 13;
+  optional string review_notes = 14;
+  optional string retrospective_notes = 15;
+  optional string created_by = 16;
+  optional string updated_by = 17;
+  google.protobuf.Timestamp created_at = 18;
+  optional google.protobuf.Timestamp updated_at = 19;
+}
+
+message SprintOverview {
+  int32 id = 1;
+  string name = 2;
+  double version = 3;
+  string status = 4;
+}

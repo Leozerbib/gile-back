@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package profile.v1;
+
+message GetByUserIdRequest {
+  string user_id = 1;
+}
+
+message ListProfilesRequest {}
+
+message InsertProfileRequest {
+  string user_id = 1;
+  string username = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string avatar_url = 5;
+}
+
+message UpdateProfileRequest {
+  string user_id = 1; // target user
+  string username = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string avatar_url = 5;
+}
+
+message Profile {
+  string id = 1;
+  string user_id = 2;
+  string username = 3;
+  string first_name = 4;
+  string last_name = 5;
+  string avatar_url = 6;
+  string created_at = 7; // ISO8601
+  string updated_at = 8; // ISO8601
+}
+
+message ProfileOverview {
+  string user_id = 1;
+  string username = 2;
+  string avatar_url = 5;
+}
+
+message ProfilesList {
+  repeated Profile items = 1;
+}
+
+service ProfileService {
+  rpc GetByUserId (GetByUserIdRequest) returns (Profile);
+  rpc GetAll (ListProfilesRequest) returns (ProfilesList);
+  rpc Insert (InsertProfileRequest) returns (Profile);
+  rpc Update (UpdateProfileRequest) returns (Profile);
+}

@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package labels.v1;
+
+import "google/protobuf/timestamp.proto";
+import "profile/v1/profile.proto";
+
+// Service for managing labels
+service Labels {
+  rpc Create(CreateRequest) returns (CreateResponse);
+  rpc FindAll(FindAllRequest) returns (FindAllResponse);
+  rpc FindById(FindByIdRequest) returns (FindByIdResponse);
+  rpc Update(UpdateRequest) returns (UpdateResponse);
+  rpc Remove(RemoveRequest) returns (RemoveResponse);
+}
+
+message CreateRequest {
+  profile.v1.ProfileOverview user = 1;
+  Label label = 2;
+}
+
+message CreateResponse {
+  Label label = 1;
+}
+
+message FindAllRequest {
+  profile.v1.ProfileOverview user = 1;
+  FindAllFilters filters = 2;
+}
+
+message FindAllFilters {
+  optional string search = 1;
+  optional string workspace_id = 2;
+  optional int32 skip = 3;
+  optional int32 take = 4;
+  optional string sort = 5;
+  optional string order = 6;
+}
+
+message FindAllResponse {
+  repeated Label labels = 1;
+  int32 total = 2;
+  int32 skip = 3;
+  int32 take = 4;
+}
+
+message FindByIdRequest {
+  profile.v1.ProfileOverview user = 1;
+  string id = 2;
+}
+
+message FindByIdResponse {
+  optional Label label = 1;
+}
+
+message UpdateRequest {
+  profile.v1.ProfileOverview user = 1;
+  string id = 2;
+  Label label = 3;
+}
+
+message UpdateResponse {
+  Label label = 1;
+}
+
+message RemoveRequest {
+  profile.v1.ProfileOverview user = 1;
+  string id = 2;
+}
+
+message RemoveResponse {
+  bool success = 1;
+}
+
+message Label {
+  int32 id = 1;
+  string name = 2;
+  optional string description = 3;
+  optional string color = 4;
+  optional string workspace_id = 5;
+  optional string created_by = 6;
+  optional string updated_by = 7;
+  google.protobuf.Timestamp created_at = 8;
+  optional google.protobuf.Timestamp updated_at = 9;
+}
