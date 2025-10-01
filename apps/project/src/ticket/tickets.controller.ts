@@ -1,7 +1,7 @@
 import { Controller } from "@nestjs/common";
 import { GrpcMethod } from "@nestjs/microservices";
 import { LoggerClientService } from "@shared/logger";
-import { CreateTicketDto, UpdateTicketDto, TicketDto, AuthenticatedUser, BaseSearchQueryDto, TicketsListDto } from "@shared/types";
+import { CreateTicketDto, UpdateTicketDto, TicketDto, BaseSearchQueryDto, TicketsListDto } from "@shared/types";
 import { TicketsService } from "./tickets.service";
 
 @Controller()
@@ -12,16 +12,17 @@ export class TicketsController {
   ) {}
 
   @GrpcMethod("Tickets", "Create")
-  async create(data: { user: AuthenticatedUser; dto: CreateTicketDto }): Promise<TicketDto> {
+  async create(data: { user_id: string; dto: CreateTicketDto }): Promise<TicketDto> {
     await this.logger.log({
       level: "info",
       service: "project",
       func: "tickets.grpc.create",
       message: "gRPC Create ticket request",
-      data,
     });
 
-    const ticket = await this.ticketsService.create(data.user.userId, data.dto);
+    const id = await this.ticketsService.create(data.user_id, data.dto);
+
+    const ticket = await this.ticketsService.getById(id, data.user_id);
 
     await this.logger.log({
       level: "info",
@@ -35,7 +36,7 @@ export class TicketsController {
   }
 
   @GrpcMethod("Tickets", "Search")
-  async search(data: { user: AuthenticatedUser; params?: BaseSearchQueryDto }): Promise<TicketsListDto> {
+  async search(data: { user_id: string; params?: BaseSearchQueryDto }): Promise<TicketsListDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -44,7 +45,7 @@ export class TicketsController {
       data,
     });
 
-    const list = await this.ticketsService.search(data.user.userId, data.params ?? {});
+    const list = await this.ticketsService.search(data.user_id, data.params ?? {});
 
     await this.logger.log({
       level: "info",
@@ -58,7 +59,7 @@ export class TicketsController {
   }
 
   @GrpcMethod("Tickets", "GetById")
-  async getById(data: { user: AuthenticatedUser; id: string }): Promise<TicketDto> {
+  async getById(data: { user_id: string; id: number }): Promise<TicketDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -67,7 +68,7 @@ export class TicketsController {
       data,
     });
 
-    const ticket = await this.ticketsService.getById(data.id, data.user.userId);
+    const ticket = await this.ticketsService.getById(data.id, data.user_id);
 
     await this.logger.log({
       level: "info",
@@ -81,7 +82,7 @@ export class TicketsController {
   }
 
   @GrpcMethod("Tickets", "Update")
-  async update(data: { user: AuthenticatedUser; id: string; dto: UpdateTicketDto }): Promise<TicketDto> {
+  async update(data: { user_id: string; id: string; dto: UpdateTicketDto }): Promise<TicketDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -90,7 +91,7 @@ export class TicketsController {
       data,
     });
 
-    const ticket = await this.ticketsService.update(data.id, data.dto, data.user.userId);
+    const ticket = await this.ticketsService.update(data.id, data.dto, data.user_id);
 
     await this.logger.log({
       level: "info",
@@ -104,7 +105,7 @@ export class TicketsController {
   }
 
   @GrpcMethod("Tickets", "Delete")
-  async delete(data: { user: AuthenticatedUser; id: string }): Promise<boolean> {
+  async delete(data: { user_id: string; id: string }): Promise<{ success: boolean }> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -113,7 +114,7 @@ export class TicketsController {
       data,
     });
 
-    const result = await this.ticketsService.delete(data.id, data.user.userId);
+    const result = await this.ticketsService.delete(data.id, data.user_id);
 
     await this.logger.log({
       level: "info",
@@ -123,6 +124,6 @@ export class TicketsController {
       data: { result },
     });
 
-    return result;
+    return { success: result };
   }
 }

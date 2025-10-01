@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from "@nestjs/common";
-import { ValidationError } from "@shared/errors";
-import { Prisma, UserRole } from "@prisma/client";
+import { Injectable } from "@nestjs/common";
+import { RpcException } from "@nestjs/microservices";
+import { status } from "@grpc/grpc-js";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "@shared/prisma";
 import { LoggerClientService } from "@shared/logger";
 import { WorkspaceMembersService } from "../member/workspace-members.service";
@@ -16,6 +17,7 @@ import {
   ProfileOverviewSelect,
   WorkspaceOverviewSelect,
   WorkspaceOverview,
+  WorkspaceRole,
 } from "@shared/types";
 import { plainToInstance } from "class-transformer";
 
@@ -58,12 +60,13 @@ export class WorkspacesService {
       service: "workspace",
       func: "workspaces.create",
       message: `Creating workspace with name: ${dto.name}`,
-      data: { ownerId, name: dto.name, slug: dto.slug },
+      data: { ownerId, name: dto.name },
     });
 
-    // Check authorization - for workspace creation, we need to check if user has global create rights
-    // Since this is workspace creation, we'll allow any authenticated user to create workspaces
-    // In a real scenario, you might want to check against a global role or subscription limits
+    // Validate ownerId
+    if (!ownerId?.trim()) {
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Owner ID is required" });
+    }
 
     // Validation des données d'entrée
     if (!dto?.name?.trim()) {
@@ -73,16 +76,14 @@ export class WorkspacesService {
         func: "workspaces.create",
         message: "Workspace creation failed: name is required",
       });
-      throw new ValidationError("Workspace name is required");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Workspace name is required" });
     }
 
     // Générer le slug
-    const slug =
-      dto.slug?.trim() ||
-      dto.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
+    const slug = dto.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "");
 
     // Vérifier l'unicité du slug
     const existingWorkspace = await this.prisma.workspaces.findUnique({
@@ -90,7 +91,7 @@ export class WorkspacesService {
     });
 
     if (existingWorkspace) {
-      throw new ConflictException(`Workspace with slug "${slug}" already exists`);
+      throw new RpcException({ code: status.ALREADY_EXISTS, message: `Workspace with slug "${slug}" already exists` });
     }
 
     try {
@@ -105,7 +106,6 @@ export class WorkspacesService {
             visibility: (dto.visibility as WorkspaceVisibility) ?? WorkspaceVisibility.PRIVATE,
             owner_id: ownerId,
             created_by: ownerId,
-            updated_by: ownerId,
           },
           include: {
             owner: {
@@ -120,13 +120,9 @@ export class WorkspacesService {
           },
         });
 
-        await tx.workspace_members.create({
-          data: {
-            workspace_id: workspace.id,
-            user_id: ownerId,
-            role: UserRole.WORKSPACE_OWNER,
-          },
-        });
+        // Add the owner as a workspace member using the service
+        // Note: We need to handle this outside the transaction since WorkspaceMembersService
+        // uses its own Prisma instance. We'll create the member after the workspace is created.
 
         // Créer les settings par défaut
         await tx.workspace_settings.create({
@@ -139,12 +135,21 @@ export class WorkspacesService {
             email_notifications: true,
             default_sprint_duration: 7,
             created_by: ownerId,
-            updated_by: ownerId,
           },
         });
 
         return workspace;
       });
+
+      // Add the owner as a workspace member using the service
+      await this.workspaceMembersService.create(
+        created.id,
+        {
+          userId: ownerId,
+          role: WorkspaceRole.WORKSPACE_OWNER,
+        },
+        ownerId,
+      );
 
       await this.loggerClient.log({
         level: "info",
@@ -156,7 +161,7 @@ export class WorkspacesService {
 
       return plainToInstance(WorkspaceDto, created, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof ConflictException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -205,6 +210,7 @@ export class WorkspacesService {
       for (const [key, value] of Object.entries(params.filters)) {
         const mappedKey = filterMapping[key] ?? key;
         // Basic equals filter; extend as needed
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         prismaFilters[mappedKey] = value;
       }
       where = SearchQueryBuilder.applyFilters(where, prismaFilters);
@@ -268,7 +274,7 @@ export class WorkspacesService {
       const hasPermission = await this.workspaceMembersService.hasRight(id, userId, "get", "workspace");
 
       if (!hasPermission) {
-        throw new UnauthorizedException("You don't have permission to view this workspace");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to view this workspace" });
       }
     }
 
@@ -289,12 +295,12 @@ export class WorkspacesService {
       });
 
       if (!item) {
-        throw new NotFoundException(`Workspace with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Workspace with ID "${id}" not found` });
       }
 
       return plainToInstance(WorkspaceDto, item, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -324,13 +330,52 @@ export class WorkspacesService {
     const search = params?.search ?? "";
 
     try {
+      if (!userId) {
+        // If no userId provided, return empty result
+        return BasePaginationDto.create([], 0, skip, take, WorkspacesListDto);
+      }
+
+      // Get all workspaces where user is owner
+      const ownedWorkspaces = await this.prisma.workspaces.findMany({
+        where: {
+          owner_id: userId,
+          name: { contains: search },
+        },
+        select: { id: true },
+      });
+
+      // Get all workspace IDs where user is a member (using WorkspaceMembersService)
+      // Note: We need to get all workspaces first, then check membership for each
+      const allWorkspaces = await this.prisma.workspaces.findMany({
+        where: {
+          name: { contains: search },
+        },
+        select: { id: true },
+      });
+
+      const memberWorkspaceIds: string[] = [];
+      for (const workspace of allWorkspaces) {
+        const isMember = await this.workspaceMembersService.isMember(workspace.id, userId);
+        if (isMember) {
+          memberWorkspaceIds.push(workspace.id);
+        }
+      }
+
+      // Combine owned and member workspace IDs
+      const accessibleWorkspaceIds = [
+        ...ownedWorkspaces.map(w => w.id),
+        ...memberWorkspaceIds.filter(id => !ownedWorkspaces.some(w => w.id === id)), // Avoid duplicates
+      ];
+
+      if (accessibleWorkspaceIds.length === 0) {
+        return BasePaginationDto.create([], 0, skip, take, WorkspacesListDto);
+      }
+
       const [items, total] = await Promise.all([
         this.prisma.workspaces.findMany({
           where: {
-            AND: {
-              name: { contains: search },
-              OR: [{ owner_id: userId }, { members: { some: { user_id: userId } } }],
-            },
+            id: { in: accessibleWorkspaceIds },
+            name: { contains: search },
           },
           select: WorkspaceOverviewSelect,
           orderBy: { created_at: Prisma.SortOrder.desc },
@@ -339,17 +384,11 @@ export class WorkspacesService {
         }),
         this.prisma.workspaces.count({
           where: {
-            AND: {
-              name: { contains: search },
-              OR: [{ owner_id: userId }, { members: { some: { user_id: userId } } }],
-            },
+            id: { in: accessibleWorkspaceIds },
+            name: { contains: search },
           },
         }),
       ]);
-
-      if (!items) {
-        throw new NotFoundException(`Workspace with search term "${search}" not found`);
-      }
 
       return BasePaginationDto.create(
         items.map(item => plainToInstance(WorkspaceOverview, item, { excludeExtraneousValues: true })),
@@ -359,7 +398,7 @@ export class WorkspacesService {
         WorkspacesListDto,
       );
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -401,13 +440,13 @@ export class WorkspacesService {
       const hasPermission = await this.workspaceMembersService.hasRight(id, updatedBy, "update", "workspace");
 
       if (!hasPermission) {
-        throw new UnauthorizedException("You don't have permission to update this workspace");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to update this workspace" });
       }
     }
 
     // Validation des données d'entrée
     if (!dto || Object.keys(dto).length === 0) {
-      throw new ValidationError("No data provided for update");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "No data provided for update" });
     }
 
     try {
@@ -417,7 +456,7 @@ export class WorkspacesService {
       });
 
       if (!existingWorkspace) {
-        throw new NotFoundException(`Workspace with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Workspace with ID "${id}" not found` });
       }
 
       // Vérifier l'unicité du slug si fourni
@@ -427,7 +466,7 @@ export class WorkspacesService {
         });
 
         if (slugConflict && slugConflict.id !== id) {
-          throw new ConflictException(`Workspace with slug "${dto.slug}" already exists`);
+          throw new RpcException({ code: status.ALREADY_EXISTS, message: `Workspace with slug "${dto.slug}" already exists` });
         }
       }
 
@@ -471,9 +510,6 @@ export class WorkspacesService {
 
       return plainToInstance(WorkspaceDto, updated, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException || error instanceof ValidationError) {
-        throw error;
-      }
       if (error instanceof Error) {
         await this.loggerClient.log({
           level: "error",
@@ -510,7 +546,7 @@ export class WorkspacesService {
       const hasPermission = await this.workspaceMembersService.hasRight(id, deletedBy, "delete", "workspace");
 
       if (!hasPermission) {
-        throw new UnauthorizedException("Only workspace owners can delete workspaces");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "Only workspace owners can delete workspaces" });
       }
     }
 
@@ -521,7 +557,7 @@ export class WorkspacesService {
       });
 
       if (!existingWorkspace) {
-        throw new NotFoundException(`Workspace with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Workspace with ID "${id}" not found` });
       }
 
       // Supprimer le workspace (les relations seront supprimées automatiquement grâce aux contraintes CASCADE)
@@ -539,7 +575,7 @@ export class WorkspacesService {
 
       return { success: true };
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {

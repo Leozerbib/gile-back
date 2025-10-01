@@ -18,25 +18,6 @@ type Nullable<T> = T extends string ? string | null : T;
 type Normalized<T> = T extends (infer U)[] ? Normalized<U>[] : T extends Record<string, any> ? { [K in keyof T]: Normalized<T[K]> } : Nullable<T>;
 
 /**
- * Type pour préserver les champs requis d'un objet Prisma
- */
-type PrismaRequiredFields<T> = {
-  [K in keyof T]: T[K] extends string | null | undefined ? never : K;
-}[keyof T];
-
-/**
- * Type pour normaliser un objet Prisma en préservant les champs requis
- */
-type PrismaNormalized<T> =
-  T extends Record<string, any>
-    ? {
-        [K in keyof T as K extends PrismaRequiredFields<T> ? K : never]: T[K];
-      } & {
-        [K in keyof T as K extends PrismaRequiredFields<T> ? never : K]: Normalized<T[K]>;
-      }
-    : T;
-
-/**
  * Vérifie si une valeur est considérée comme vide
  * @param value La valeur à tester
  * @returns true si la valeur est vide
@@ -61,6 +42,11 @@ function isEmptyValue(value: unknown): boolean {
 function normalizeValue(value: unknown): unknown {
   if (isEmptyValue(value)) {
     return null;
+  }
+
+  // Convertir explicitement les BigInt en string pour une sérialisation JSON sûre
+  if (typeof value === "bigint") {
+    return value.toString();
   }
 
   // Si c'est un objet, on le normalise récursivement
@@ -173,6 +159,7 @@ export function normalizeWithRequiredFields<T extends Record<string, any>>(obj: 
       if (typeof value === "string" && EMPTY_VALUES.has(value.toLowerCase().trim())) {
         throw new Error(`Champ requis '${key}' ne peut pas être vide`);
       }
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       normalized[key] = value;
     } else {
       // Champs optionnels : normaliser normalement

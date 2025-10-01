@@ -6,19 +6,19 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build main",
-    "build:main": "nest build main",
+    "build": "nest build gilentry && nest build auth && nest build workspace && nest build project && nest build chat && nest build analytics && nest build logger",
+    "build:main": "nest build gilentry",
     "build:auth": "nest build auth",
     "build:workspace": "nest build workspace",
     "build:project": "nest build project",
     "build:chat": "nest build chat",
     "build:analytics": "nest build analytics",
     "build:logger": "nest build logger",
-    "format": "prettier --write \"{src,apps,libs}/**/*.ts\"",
+    "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start main",
     "start:dev": "nest start main --watch",
     "start:debug": "nest start main --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/apps/gile-back/main",
     "start:main": "nest start main",
     "start:dev:main": "nest start main --watch",
     "start:auth": "nest start auth",
@@ -38,7 +38,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "test:e2e": "jest --config ./apps/gile-back/test/jest-e2e.json",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio"
@@ -98,7 +98,7 @@
       "json",
       "ts"
     ],
-    "rootDir": "src",
+    "rootDir": ".",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "^.+\\.(t|j)s$": "ts-jest"
@@ -106,7 +106,10 @@
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "coverageDirectory": "./coverage",
+    "testEnvironment": "node",
+    "roots": [
+      "<rootDir>/apps/"
+    ]
   }
 }

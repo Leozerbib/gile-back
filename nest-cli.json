@@ -1,18 +1,23 @@
 {
   "$schema": "https://json.schemastore.org/nest-cli",
   "collection": "@nestjs/schematics",
+  "root": "apps/gilentry",
+  "entryFile": "main",
+  "sourceRoot": "apps/gilentry/src",
   "monorepo": true,
   "compilerOptions": {
     "deleteOutDir": true,
-    "assets": ["**/*.proto"],
+    "assets": [
+      "**/*.proto"
+    ],
     "watchAssets": true
   },
   "projects": {
-    "main": {
+    "analytics": {
       "type": "application",
-      "root": ".",
+      "root": "apps/analytics",
       "entryFile": "main",
-      "sourceRoot": "src",
+      "sourceRoot": "apps/analytics/src",
       "compilerOptions": {
         "tsConfigPath": "tsconfig.build.json"
       }
@@ -26,11 +31,29 @@
         "tsConfigPath": "tsconfig.build.json"
       }
     },
-    "workspace": {
+    "chat": {
       "type": "application",
-      "root": "apps/workspace",
+      "root": "apps/chat",
       "entryFile": "main",
-      "sourceRoot": "apps/workspace/src",
+      "sourceRoot": "apps/chat/src",
+      "compilerOptions": {
+        "tsConfigPath": "tsconfig.build.json"
+      }
+    },
+    "gilentry": {
+      "type": "application",
+      "root": "apps/gilentry",
+      "entryFile": "main",
+      "sourceRoot": "apps/gilentry/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/gilentry/tsconfig.app.json"
+      }
+    },
+    "logger": {
+      "type": "application",
+      "root": "apps/logger",
+      "entryFile": "main",
+      "sourceRoot": "apps/logger/src",
       "compilerOptions": {
         "tsConfigPath": "tsconfig.build.json"
       }
@@ -44,38 +67,11 @@
         "tsConfigPath": "tsconfig.build.json"
       }
     },
-    "chat": {
-      "type": "application",
-      "root": "apps/chat",
-      "entryFile": "main",
-      "sourceRoot": "apps/chat/src",
-      "compilerOptions": {
-        "tsConfigPath": "tsconfig.build.json"
-      }
-    },
-    "analytics": {
-      "type": "application",
-      "root": "apps/analytics",
-      "entryFile": "main",
-      "sourceRoot": "apps/analytics/src",
-      "compilerOptions": {
-        "tsConfigPath": "tsconfig.build.json"
-      }
-    },
-    "logger": {
-      "type": "application",
-      "root": "apps/logger",
-      "entryFile": "main",
-      "sourceRoot": "apps/logger/src",
-      "compilerOptions": {
-        "tsConfigPath": "tsconfig.build.json"
-      }
-    },
-    "shared-types": {
+    "proto": {
       "type": "library",
-      "root": "libs/shared/types",
+      "root": "libs/proto",
       "entryFile": "index",
-      "sourceRoot": "libs/shared/types/src",
+      "sourceRoot": "libs/proto",
       "compilerOptions": {
         "tsConfigPath": "tsconfig.build.json"
       }
@@ -98,15 +94,6 @@
         "tsConfigPath": "tsconfig.build.json"
       }
     },
-    "shared-utils": {
-      "type": "library",
-      "root": "libs/shared/utils",
-      "entryFile": "index",
-      "sourceRoot": "libs/shared/utils/src",
-      "compilerOptions": {
-        "tsConfigPath": "tsconfig.build.json"
-      }
-    },
     "shared-prisma": {
       "type": "library",
       "root": "libs/shared/prisma",
@@ -116,11 +103,29 @@
         "tsConfigPath": "tsconfig.build.json"
       }
     },
-    "proto": {
+    "shared-types": {
       "type": "library",
-      "root": "libs/proto",
+      "root": "libs/shared/types",
       "entryFile": "index",
-      "sourceRoot": "libs/proto",
+      "sourceRoot": "libs/shared/types/src",
+      "compilerOptions": {
+        "tsConfigPath": "tsconfig.build.json"
+      }
+    },
+    "shared-utils": {
+      "type": "library",
+      "root": "libs/shared/utils",
+      "entryFile": "index",
+      "sourceRoot": "libs/shared/utils/src",
+      "compilerOptions": {
+        "tsConfigPath": "tsconfig.build.json"
+      }
+    },
+    "workspace": {
+      "type": "application",
+      "root": "apps/workspace",
+      "entryFile": "main",
+      "sourceRoot": "apps/workspace/src",
       "compilerOptions": {
         "tsConfigPath": "tsconfig.build.json"
       }

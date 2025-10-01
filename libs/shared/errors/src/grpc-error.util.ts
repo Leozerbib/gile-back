@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 export const GRPC_UNAVAILABLE_CODE = 14; // @grpc/grpc-js status.UNAVAILABLE
 
 export function isGrpcUnavailableError(err: any): boolean {

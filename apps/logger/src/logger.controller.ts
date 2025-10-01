@@ -46,7 +46,7 @@ export class LoggerController {
     const service = data.service ?? "unknown";
     const func = data.func ?? "unknown";
     const message = data.message ?? "";
-    const parsed = data.data_json ? safeParseJSON(data.data_json) : undefined;
+    const parsed = data.data_json ? (safeParseJSON(data.data_json) as JSON) : undefined;
 
     const line = formatLogLine({ timestamp, level, service, func, message, data: parsed });
     // Output log to stdout
@@ -56,9 +56,9 @@ export class LoggerController {
   }
 }
 
-function safeParseJSON(json: string): any | undefined {
+function safeParseJSON(json: string): JSON | undefined {
   try {
-    return JSON.parse(json);
+    return JSON.parse(json) as JSON;
   } catch {
     return undefined;
   }

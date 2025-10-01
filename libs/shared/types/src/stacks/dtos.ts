@@ -1,20 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, IsUUID, Length, MaxLength, Min } from "class-validator";
 import { Expose, Transform } from "class-transformer";
-import { ProfileOverview } from "../profile/dtos";
+import { ProfileOverview, ProfileOverviewSelect } from "../profile/dtos";
 import { BasePaginationDto } from "../common/page";
-
-/**
- * Statut d'une stack - cycle de vie de la stack
- * Compatible avec Prisma enum StackStatus
- */
-export enum StackStatus {
-  ACTIVE = "ACTIVE",
-  PRODUCTION = "PRODUCTION",
-  DEPRECATED = "DEPRECATED",
-  ARCHIVED = "ARCHIVED",
-  DRAFT = "DRAFT",
-}
 
 /**
  * Type d'une stack - classification fonctionnelle
@@ -115,18 +103,6 @@ export class CreateStackDto {
   @IsOptional()
   @IsBoolean({ message: "Le champ principal doit être un booléen" })
   is_primary?: boolean = false;
-
-  @ApiPropertyOptional({
-    description: "Statut de la stack",
-    enum: StackStatus,
-    example: StackStatus.ACTIVE,
-    default: StackStatus.ACTIVE,
-    enumName: "StackStatus",
-  })
-  @Expose()
-  @IsOptional()
-  @IsEnum(StackStatus, { message: "Statut de stack invalide" })
-  status?: StackStatus = StackStatus.ACTIVE;
 }
 
 /**
@@ -193,17 +169,6 @@ export class UpdateStackDto {
   @IsOptional()
   @IsBoolean({ message: "Le champ principal doit être un booléen" })
   is_primary?: boolean;
-
-  @ApiPropertyOptional({
-    description: "Statut mis à jour",
-    enum: StackStatus,
-    example: StackStatus.PRODUCTION,
-    enumName: "StackStatus",
-  })
-  @Expose()
-  @IsOptional()
-  @IsEnum(StackStatus, { message: "Statut de stack invalide" })
-  status?: StackStatus;
 }
 
 /**
@@ -263,17 +228,6 @@ export class StackOverview {
   @Expose()
   @IsBoolean({ message: "Le champ principal doit être un booléen" })
   is_primary!: boolean;
-
-  @ApiPropertyOptional({
-    description: "Statut de la stack",
-    enum: StackStatus,
-    example: StackStatus.ACTIVE,
-    enumName: "StackStatus",
-  })
-  @Expose()
-  @IsOptional()
-  @IsEnum(StackStatus, { message: "Statut de stack invalide" })
-  status?: StackStatus;
 }
 
 /**
@@ -314,37 +268,16 @@ export class StackDto extends StackOverview {
     description?: string;
   };
 
-  @ApiPropertyOptional({
-    description: "URL de documentation de la stack",
-    example: "https://react.dev/",
-    format: "uri",
-    type: "string",
+  @ApiProperty({
+    description: "ID du projet associé à la stack",
+    example: 123,
+    type: "integer",
+    minimum: 1,
   })
   @Expose()
-  @IsOptional()
-  @IsString({ message: "L'URL de documentation doit être une chaîne de caractères" })
-  documentation_url?: string;
-
-  @ApiPropertyOptional({
-    description: "URL du repository de la stack",
-    example: "https://github.com/user/react-stack",
-    format: "uri",
-    type: "string",
-  })
-  @Expose()
-  @IsOptional()
-  @IsString({ message: "L'URL du repository doit être une chaîne de caractères" })
-  repository_url?: string;
-
-  @ApiPropertyOptional({
-    description: "Métadonnées de la stack",
-    type: "object",
-    additionalProperties: true,
-    example: { license: "MIT", last_updated: "2024-01-15" },
-  })
-  @Expose()
-  @IsOptional()
-  metadata?: Record<string, any>;
+  @IsInt({ message: "L'ID du projet doit être un nombre entier" })
+  @Min(1, { message: "L'ID du projet doit être positif" })
+  project_id!: number;
 
   @ApiProperty({
     description: "Date de création de la stack (ISO 8601)",
@@ -414,3 +347,93 @@ export class StackListDto extends BasePaginationDto<StackDto> {
   @Expose()
   items!: StackDto[];
 }
+
+// Prisma select types for type-safe queries
+export const StackOverviewSelect = {
+  id: true,
+  title: true,
+  type: true,
+  version: true,
+  is_primary: true,
+} as const;
+
+export const StackDtoSelect = {
+  id: true,
+  title: true,
+  type: true,
+  version: true,
+  is_primary: true,
+  language_id: true,
+  language: {
+    select: {
+      id: true,
+      name: true,
+      icon: true,
+      color: true,
+      description: true,
+    },
+  },
+  project_id: true,
+  created_at: true,
+  updated_at: true,
+  created_by: true,
+  updated_by: true,
+  created_by_user: {
+    select: {
+      ...ProfileOverviewSelect,
+    },
+  },
+  updated_by_user: {
+    select: {
+      ...ProfileOverviewSelect,
+    },
+  },
+} as const;
+
+export const StackListSelect = {
+  ...StackDtoSelect,
+} as const;
+
+// Type helpers for Prisma query return types
+export type PrismaStackOverview = {
+  id: number;
+  title: string;
+  type: string;
+  version: string | null;
+  is_primary: boolean;
+};
+
+export type PrismaStackDto = {
+  id: number;
+  title: string;
+  type: string;
+  version: string | null;
+  is_primary: boolean;
+  language_id: number | null;
+  language: {
+    id: number;
+    name: string;
+    icon: string | null;
+    color: string | null;
+    description: string | null;
+  } | null;
+  documentation_url: string | null;
+  repository_url: string | null;
+  metadata: any;
+  created_at: Date;
+  updated_at: Date | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_by_user: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+  } | null;
+  updated_by_user: {
+    id: string;
+    username: string;
+    avatar_url: string | null;
+  } | null;
+};
+
+export type PrismaStackList = PrismaStackDto[];

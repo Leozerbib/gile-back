@@ -1,0 +1,93 @@
+services:
+  # Main HTTP gateway (Supabase external DB via .env)
+  gilentry:
+    container_name: gilentry
+    build: .
+    image: gile-back:latest
+    env_file:
+      - ./.env
+    environment:
+      # Override gRPC endpoints to use Compose DNS service names (renamed services)
+      AUTH_GRPC_URL: gile-auth:50051
+      WORKSPACE_GRPC_URL: gile-workspace:50052
+      PROJECT_GRPC_URL: gile-project:50053
+      CHAT_GRPC_URL: gile-chat:50054
+      ANALYTICS_GRPC_URL: gile-analytics:50055
+      LOGGER_GRPC_URL: gile-logger:50056
+    depends_on:
+      gile-auth:
+        condition: service_started
+      gile-workspace:
+        condition: service_started
+      gile-project:
+        condition: service_started
+      gile-chat:
+        condition: service_started
+      gile-analytics:
+        condition: service_started
+      gile-logger:
+        condition: service_started
+    ports:
+      - "3000:3000"
+    command: ["node", "dist/apps/gilentry/src/main.js"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api-json"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # Microservices using Supabase DATABASE_URL from env file
+  gile-auth:
+    container_name: gile-auth
+    image: gile-back:latest
+    env_file:
+      - ./.env
+    command: ["node", "dist/apps/auth/src/main.js"]
+    ports:
+      - "50051:50051"
+
+  gile-workspace:
+    container_name: gile-workspace
+    image: gile-back:latest
+    env_file:
+      - ./.env
+    command: ["node", "dist/apps/workspace/src/main.js"]
+    ports:
+      - "50052:50052"
+
+  gile-project:
+    container_name: gile-project
+    image: gile-back:latest
+    env_file:
+      - ./.env
+    command: ["node", "dist/apps/project/src/main.js"]
+    ports:
+      - "50053:50053"
+
+  gile-chat:
+    container_name: gile-chat
+    image: gile-back:latest
+    env_file:
+      - ./.env
+    command: ["node", "dist/apps/chat/src/main.js"]
+    ports:
+      - "50054:50054"
+
+  gile-analytics:
+    container_name: gile-analytics
+    image: gile-back:latest
+    env_file:
+      - ./.env
+    command: ["node", "dist/apps/analytics/src/main.js"]
+    ports:
+      - "50055:50055"
+
+  gile-logger:
+    container_name: gile-logger
+    image: gile-back:latest
+    env_file:
+      - ./.env
+    command: ["node", "dist/apps/logger/src/main.js"]
+    ports:
+      - "50056:50056"

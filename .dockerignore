@@ -1,0 +1,18 @@
+node_modules
+npm-debug.log*
+pnpm-debug.log*
+Dockerfile*
+.dockerignore
+.git
+.gitignore
+.dist
+/coverage
+/.vscode
+/.trae
+.env
+.env.*
+**/*.tsbuildinfo
+**/*.map
+
+# Ignore local Prisma migrations artifacts if any
+prisma/migrations

@@ -1,25 +1,26 @@
 import { Controller } from "@nestjs/common";
 import { GrpcMethod } from "@nestjs/microservices";
 import { ProfileService } from "./profile.service";
+import { ProfileDto, ProfilesListDto } from "@shared/types";
 
 @Controller()
 export class ProfileController {
   constructor(private readonly service: ProfileService) {}
 
   @GrpcMethod("ProfileService", "GetByUserId")
-  async getByUserId(data: { user_id: string }) {
+  async getByUserId(data: { user_id: string }): Promise<ProfileDto> {
     const row = await this.service.getByUserId(data.user_id);
-    return serialize(row);
+    return row;
   }
 
   @GrpcMethod("ProfileService", "GetAll")
-  async getAll(_: Record<string, never>) {
+  async getAll(): Promise<ProfilesListDto> {
     const rows = await this.service.getAll();
-    return { items: rows.map(serialize) };
+    return rows;
   }
 
   @GrpcMethod("ProfileService", "Insert")
-  async insert(data: { user_id: string; username?: string; first_name?: string; last_name?: string; avatar_url?: string }) {
+  async insert(data: { user_id: string; username?: string; first_name?: string; last_name?: string; avatar_url?: string }): Promise<{ success: boolean }> {
     const row = await this.service.insert({
       user_id: data.user_id,
       username: data.username,
@@ -27,30 +28,23 @@ export class ProfileController {
       last_name: data.last_name,
       avatar_url: data.avatar_url,
     });
-    return serialize(row);
+    if (!row) {
+      throw new Error("Profile not created");
+    }
+    return { success: true };
   }
 
   @GrpcMethod("ProfileService", "Update")
-  async update(data: { user_id: string; username?: string; first_name?: string; last_name?: string; avatar_url?: string }) {
+  async update(data: { user_id: string; username?: string; first_name?: string; last_name?: string; avatar_url?: string }): Promise<ProfileDto> {
     const row = await this.service.update(data.user_id, {
       username: data.username,
       first_name: data.first_name,
       last_name: data.last_name,
       avatar_url: data.avatar_url,
     });
-    return serialize(row);
+    if (!row) {
+      throw new Error("Profile not updated");
+    }
+    return row;
   }
-}
-
-function serialize(row: any) {
-  return {
-    id: String(row.id),
-    user_id: row.user_id,
-    username: row.username ?? null,
-    first_name: row.first_name ?? null,
-    last_name: row.last_name ?? null,
-    avatar_url: row.avatar_url ?? null,
-    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : null,
-    updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : null,
-  };
 }

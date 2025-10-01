@@ -1,0 +1,238 @@
+syntax = "proto3";
+
+package teams.v1;
+
+import "profile/v1/profile.proto";
+import "util/page.proto";
+import "util/search.proto";
+
+// ============================================================================
+// MESSAGES
+// ============================================================================
+
+message CreateTeamDto {
+  string workspace_id = 1; // UUID
+  string name = 2;
+  optional string description = 3;
+  optional string avatar_url = 4;
+}
+
+message UpdateTeamDto {
+  optional string name = 1;
+  optional string description = 2;
+  optional string avatar_url = 3;
+  optional bool is_active = 4;
+}
+
+message TeamOverview {
+  string id = 1;       // UUID
+  string name = 2;
+  string slug = 3;
+  optional string description = 4;
+  bool is_active = 5;
+  optional string avatar_url = 6;
+}
+
+message Team {
+  string id = 1;       // UUID
+  string name = 2;
+  string slug = 3;
+  optional string description = 4;
+  bool is_active = 5;
+  string avatar_url = 6;
+  string created_at = 7;          // ISO8601
+  string updated_at = 8; // ISO8601
+  string created_by = 9;
+  string updated_by = 10;
+  profile.v1.ProfileOverview created_by_user = 11;
+  profile.v1.ProfileOverview updated_by_user = 12;
+}
+
+message TeamList {
+  repeated Team items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  util.PaginationMeta meta = 5;
+}
+
+// ============================================================================
+// REQUESTS
+// ============================================================================
+
+message CreateRequest {
+  string user_id = 1;
+  string workspace_id = 2;
+  CreateTeamDto dto = 3;
+}
+
+message GetByIdRequest {
+  string user_id = 1;
+  string workspace_id = 2;
+  string id = 3; // UUID
+}
+
+message GetOverviewRequest {
+  string user_id = 1;
+  string workspace_id = 2;
+  optional util.SearchQuery params = 3;
+}
+
+message UpdateRequest {
+  string user_id = 1;
+  string workspace_id = 2;
+  string id = 3; // UUID
+  UpdateTeamDto dto = 4;
+}
+
+message DeleteRequest {
+  string user_id = 1;
+  string workspace_id = 2;
+  string id = 3; // UUID
+}
+
+message DeleteResponse {
+  bool success = 1;
+}
+
+// ============================================================================
+// SERVICE
+// ============================================================================
+
+service Teams {
+  rpc Create (CreateRequest) returns (Team);
+  rpc GetById (GetByIdRequest) returns (Team);
+  rpc GetOverview (GetOverviewRequest) returns (TeamList);
+  rpc Update (UpdateRequest) returns (Team);
+  rpc Delete (DeleteRequest) returns (DeleteResponse);
+}
+
+// ============================================================================
+// TEAM MEMBERS ENUMS & MESSAGES
+// ============================================================================
+
+// Role of a member within a team
+enum TeamRole {
+  TEAM_ROLE_UNSPECIFIED = 0;
+  LEADER = 1;
+  MEMBER = 2;
+  CONTRIBUTOR = 3;
+  OBSERVER = 4;
+}
+
+// DTOs aligned with libs/shared/types/src/teams/dtos.ts
+message AddTeamMemberDto {
+  string user_id = 1;
+  optional TeamRole role = 2;
+}
+
+message UpdateTeamMemberDto {
+  optional TeamRole role = 1;
+}
+
+message TeamMemberOverview {
+  string id = 1;       // UUID
+  TeamRole role = 2;
+  profile.v1.ProfileOverview profile = 3;
+}
+
+message TeamMemberDto {
+  string id = 1;       // UUID
+  TeamRole role = 4;
+  string created_at = 5; // ISO8601
+  profile.v1.ProfileOverview profile = 6;
+}
+
+message TeamMembersList {
+  repeated TeamMemberDto items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
+}
+
+// ============================================================================
+// TEAM MEMBERS REQUESTS/RESPONSES
+// ============================================================================
+
+message AddMemberRequest {
+  string user_id = 1; // acting user
+  string team_id = 2; // target team
+  AddTeamMemberDto dto = 3;
+}
+
+message GetMembersByTeamRequest {
+  string user_id = 1; // acting user
+  string team_id = 2; // target team
+}
+
+message GetMemberByIdRequest {
+  string team_id = 1; // team context
+  string id = 2;      // member id
+  string user_id = 3; // acting user
+}
+
+message GetMembersOverviewRequest {
+  string user_id = 1; // acting user
+  string team_id = 2; // target team
+  optional util.SearchQuery params = 3;
+}
+
+message UpdateMemberRequest {
+  string user_id = 1; // acting user
+  string team_id = 2; // team context
+  string id = 3;      // member id
+  UpdateTeamMemberDto dto = 4;
+}
+
+message DeleteMemberRequest {
+  string user_id = 1; // acting user
+  string team_id = 2; // team context
+  string id = 3;      // member id
+}
+
+message IsMemberRequest {
+  string team_id = 1;
+  string user_id = 2;
+}
+
+message IsMemberResponse {
+  bool is_member = 1;
+}
+
+message GetUserRoleRequest {
+  string team_id = 1;
+  string user_id = 2;
+}
+
+message GetUserRoleResponse {
+  optional TeamRole role = 1;
+}
+
+message HasRightRequest {
+  string team_id = 1;
+  string user_id = 2;
+  string action = 3;   // create|get|update|delete
+  string resource = 4; // member|project
+}
+
+message HasRightResponse {
+  bool allowed = 1;
+}
+
+// ============================================================================
+// TEAM MEMBERS SERVICE
+// ============================================================================
+
+service TeamMembers {
+  rpc Create (AddMemberRequest) returns (TeamMemberDto);
+  rpc GetByTeamId (GetMembersByTeamRequest) returns (TeamMembersList);
+  rpc GetById (GetMemberByIdRequest) returns (TeamMemberDto);
+  rpc GetOverview (GetMembersOverviewRequest) returns (TeamMembersList);
+  rpc Update (UpdateMemberRequest) returns (TeamMemberDto);
+  rpc Delete (DeleteMemberRequest) returns (DeleteResponse);
+  rpc IsMember (IsMemberRequest) returns (IsMemberResponse);
+  rpc GetUserRole (GetUserRoleRequest) returns (GetUserRoleResponse);
+  rpc HasRight (HasRightRequest) returns (HasRightResponse);
+}

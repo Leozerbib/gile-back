@@ -22,6 +22,11 @@ message VerifyRequest {
   string access_token = 1;
 }
 
+message VerifyOtpRequest {
+  string email = 1;
+  string otp = 2;
+}
+
 message VerifyResponse {
   bool valid = 1;
   string user_id = 2;
@@ -32,6 +37,13 @@ message VerifyResponse {
 message SignUpRequest {
   string email = 1;
   string password = 2;
+  string username = 3;
+  string first_name = 4;
+  string last_name = 5;
+}
+
+message SignUpResponse {
+  bool success = 1;
 }
 
 message GetUserRequest {
@@ -49,8 +61,9 @@ message UserInfo {
 
 service Auth {
   rpc SignIn (SignInRequest) returns (AuthTokens);
-  rpc SignUp (SignUpRequest) returns (AuthTokens);
+  rpc SignUp (SignUpRequest) returns (SignUpResponse);
   rpc Refresh (RefreshRequest) returns (AuthTokens);
+  rpc VerifyOtp (VerifyOtpRequest) returns (AuthTokens);
   rpc Verify (VerifyRequest) returns (VerifyResponse);
   rpc GetUser (GetUserRequest) returns (UserInfo);
 }

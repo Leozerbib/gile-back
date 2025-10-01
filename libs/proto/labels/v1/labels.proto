@@ -4,82 +4,103 @@ package labels.v1;
 
 import "google/protobuf/timestamp.proto";
 import "profile/v1/profile.proto";
+import "util/page.proto";
+import "util/search.proto";
 
-// Service for managing labels
-service Labels {
-  rpc Create(CreateRequest) returns (CreateResponse);
-  rpc FindAll(FindAllRequest) returns (FindAllResponse);
-  rpc FindById(FindByIdRequest) returns (FindByIdResponse);
-  rpc Update(UpdateRequest) returns (UpdateResponse);
-  rpc Remove(RemoveRequest) returns (RemoveResponse);
+option go_package = "github.com/bibz-project/gile-back/libs/proto/labels/v1";
+
+message CreateLabelRequest {
+  string userId = 1;
+  CreateLabelDto dto = 2;
+  string workspaceId = 3;
 }
 
-message CreateRequest {
-  profile.v1.ProfileOverview user = 1;
-  Label label = 2;
+message SearchLabelsRequest {
+  util.SearchQuery params = 1;
+  string workspaceId = 2;
 }
 
-message CreateResponse {
-  Label label = 1;
+message SearchLabelsResponse {
+  repeated LabelDto items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
 }
 
-message FindAllRequest {
-  profile.v1.ProfileOverview user = 1;
-  FindAllFilters filters = 2;
+message GetLabelByIdRequest {
+  string id = 1;
+  optional string userId = 2;
+  string workspaceId = 3;
 }
 
-message FindAllFilters {
-  optional string search = 1;
-  optional string workspace_id = 2;
-  optional int32 skip = 3;
-  optional int32 take = 4;
-  optional string sort = 5;
-  optional string order = 6;
+message GetOverviewRequest {
+  util.SearchQuery params = 1;
+  string userId = 2;
+  string workspaceId = 3;
 }
 
-message FindAllResponse {
-  repeated Label labels = 1;
-  int32 total = 2;
-  int32 skip = 3;
-  int32 take = 4;
+message GetOverviewResponse {
+  repeated LabelDto items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
 }
 
-message FindByIdRequest {
-  profile.v1.ProfileOverview user = 1;
-  string id = 2;
+message UpdateLabelRequest {
+  string id = 1;
+  UpdateLabelDto dto = 2;
+  optional string updatedBy = 3;
+  string workspaceId = 4;
 }
 
-message FindByIdResponse {
-  optional Label label = 1;
+message DeleteLabelRequest {
+  string id = 1;
+  optional string deletedBy = 2;
+  string workspaceId = 3;
 }
 
-message UpdateRequest {
-  profile.v1.ProfileOverview user = 1;
-  string id = 2;
-  Label label = 3;
-}
-
-message UpdateResponse {
-  Label label = 1;
-}
-
-message RemoveRequest {
-  profile.v1.ProfileOverview user = 1;
-  string id = 2;
-}
-
-message RemoveResponse {
+message DeleteLabelResponse {
   bool success = 1;
 }
 
-message Label {
-  int32 id = 1;
+// ============================================================================
+// DTOs (aligned with libs/shared/types/src/labels/dtos.ts)
+// ============================================================================
+
+message CreateLabelDto {
+  string name = 1;
+  optional string description = 2;
+  optional string color = 3;
+  optional string workspace_id = 4;
+}
+
+message UpdateLabelDto {
+  optional string name = 1;
+  optional string description = 2;
+  optional string color = 3;
+  optional string workspace_id = 4;
+}
+
+message LabelDto {
+  string id = 1;
   string name = 2;
   optional string description = 3;
   optional string color = 4;
-  optional string workspace_id = 5;
-  optional string created_by = 6;
-  optional string updated_by = 7;
-  google.protobuf.Timestamp created_at = 8;
-  optional google.protobuf.Timestamp updated_at = 9;
+}
+
+// ============================================================================
+// SERVICE
+// ============================================================================
+
+service LabelService {
+  rpc Create(CreateLabelRequest) returns (LabelDto);
+  rpc Search(SearchLabelsRequest) returns (SearchLabelsResponse);
+  rpc GetById(GetLabelByIdRequest) returns (LabelDto);
+  rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
+  rpc Update(UpdateLabelRequest) returns (LabelDto);
+  rpc Delete(DeleteLabelRequest) returns (DeleteLabelResponse);
 }

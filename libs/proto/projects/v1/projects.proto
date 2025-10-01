@@ -1,0 +1,180 @@
+syntax = "proto3";
+
+package projects.v1;
+
+import "google/protobuf/struct.proto";
+import "profile/v1/profile.proto";
+import "util/page.proto";
+import "util/search.proto";
+import "teams/v1/teams.proto";
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum ProjectStatus {
+  PROJECT_STATUS_UNSPECIFIED = 0;
+  TODO = 1;
+  ACTIVE = 2;
+  STABLE = 3;
+  DONE = 4;
+  CANCELLED = 5;
+  TO_COMPLETE = 6;
+}
+
+enum ProjectPriority {
+  PROJECT_PRIORITY_UNSPECIFIED = 0;
+  LOW = 1;
+  MEDIUM = 2;
+  HIGH = 3;
+  CRITICAL = 4;
+}
+
+// ============================================================================
+// MESSAGES
+// ============================================================================
+
+message CreateProjectDto {
+  string name = 1;
+  string description = 2;
+  string full_description = 3;
+  string project_manager_id = 4; // UUID
+  string team_id = 5; // UUID
+  ProjectPriority priority = 6;
+  string start_date = 7; // ISO 8601
+  string end_date = 8;   // ISO 8601
+  bool is_public = 9;
+  google.protobuf.Struct settings = 10;
+  google.protobuf.Struct custom_fields = 11;
+}
+
+message UpdateProjectDto {
+  optional string name = 1;
+  optional string description = 2;
+  optional string full_description = 3;
+  optional string project_manager_id = 4; // UUID
+  optional ProjectStatus status = 5;
+  optional ProjectPriority priority = 6;
+  optional string start_date = 7;       // ISO 8601
+  optional string end_date = 8;         // ISO 8601
+  optional string actual_end_date = 9;  // ISO 8601
+  optional bool is_archived = 10;
+  optional bool is_public = 11;
+  optional google.protobuf.Struct settings = 12;
+  optional google.protobuf.Struct custom_fields = 13;
+}
+
+message ProjectOverview {
+  int32 id = 1;
+  string name = 2;
+  ProjectStatus status = 3;
+  ProjectPriority priority = 4;
+  int32 progress = 5; // 0..100
+  string created_at = 6; // ISO 8601
+}
+
+message Project {
+  int32 id = 1;
+  string name = 2;
+  optional string slug = 3;
+  optional string description = 4;
+  optional string full_description = 5;
+  ProjectStatus status = 6;
+  ProjectPriority priority = 7;
+  int32 progress = 8;
+  string workspace_id = 9;
+  optional string project_manager_id = 10;
+  optional string start_date = 11;      // ISO 8601
+  optional string end_date = 12;        // ISO 8601
+  optional string actual_end_date = 13; // ISO 8601
+  optional bool is_archived = 14;
+  optional bool is_public = 15;
+  optional google.protobuf.Struct settings = 16;
+  optional google.protobuf.Struct custom_fields = 17;
+  string created_at = 18;               // ISO 8601
+  optional string updated_at = 19;      // ISO 8601
+  optional string created_by = 20;
+  optional string updated_by = 21;
+  optional profile.v1.ProfileOverview created_by_user = 22;
+  optional profile.v1.ProfileOverview updated_by_user = 23;
+  optional profile.v1.ProfileOverview manager = 24;
+}
+
+message ProjectsList {
+  repeated Project items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
+}
+
+message ProjectsOverviewList {
+  repeated ProjectOverview items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
+}
+
+// ============================================================================
+// REQUESTS
+// ============================================================================
+
+message CreateRequest {
+  string user_id = 1;
+  string workspace_id = 2;
+  CreateProjectDto dto = 3;
+}
+
+message SearchRequest {
+  string user_id = 1;
+  string workspace_id = 2;
+  optional util.SearchQuery params = 3;
+}
+
+message GetByIdRequest {
+  string user_id = 1;
+  int32 id = 2;
+}
+
+message GetOverviewRequest {
+  string user_id = 1; 
+  string workspace_id = 2;
+  optional util.SearchQuery params = 3;
+}
+
+message UpdateRequest {
+  string user_id = 1; 
+  int32 id = 2;
+  UpdateProjectDto dto = 3;
+}
+
+message DeleteRequest {
+  string user_id = 1;  
+  int32 id = 2;
+}
+
+message DeleteResponse {
+  bool success = 1;
+}
+
+message GetTeamRequest {
+  string user_id = 1; 
+  int32 project_id = 2;
+}
+
+// ============================================================================
+// SERVICE
+// ============================================================================
+
+service Projects {
+  rpc Create (CreateRequest) returns (Project);
+  rpc Search (SearchRequest) returns (ProjectsList);
+  rpc GetById (GetByIdRequest) returns (Project);
+  rpc GetOverview (GetOverviewRequest) returns (ProjectsOverviewList);
+  rpc Update (UpdateRequest) returns (Project);
+  rpc Delete (DeleteRequest) returns (DeleteResponse);
+  rpc GetTeam (GetTeamRequest) returns (teams.v1.TeamOverview);
+}

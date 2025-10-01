@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package members.v1;
+
+import "profile/v1/profile.proto";
+import "util/search.proto";
+import "util/page.proto";
+import "workspace/v1/workspace.proto"; // reuse WorkspaceRole enum
+
+option go_package = "github.com/bibz-project/gile-back/libs/proto/members/v1";
+
+// ============================================================================
+// DTOs (aligned with libs/shared/types/src/workspace/dtos.ts)
+// ============================================================================
+
+message AddWorkspaceMemberDto {
+  string userId = 1; // UUID of user to add
+  optional workspace.v1.WorkspaceRole role = 2; // default handled server-side
+}
+
+message UpdateWorkspaceMemberDto {
+  optional workspace.v1.WorkspaceRole role = 1;
+  optional bool is_active = 2;
+}
+
+message WorkspaceMemberOverview {
+  string id = 1; // UUID
+  workspace.v1.WorkspaceRole role = 2;
+  profile.v1.ProfileOverview user = 3;
+}
+
+message WorkspaceMemberDto {
+  string id = 1;             // UUID
+  string user_id = 2;        // UUID
+  workspace.v1.WorkspaceRole role = 3;
+  bool is_active = 4;
+  string created_at = 5;     // ISO8601
+  optional string updated_at = 6; // ISO8601
+  profile.v1.ProfileOverview created_by_user = 7; // optional relation
+  profile.v1.ProfileOverview profile = 8;         // optional relation to user's profile
+}
+
+message WorkspaceMembersList {
+  repeated WorkspaceMemberDto items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  util.PaginationMeta meta = 5;
+}
+
+// ============================================================================
+// REQUEST/RESPONSE MESSAGES
+// ============================================================================
+
+message AddMemberRequest {
+  string user_id = 1;        // acting user
+  string workspace_id = 2;   // target workspace
+  AddWorkspaceMemberDto dto = 3;
+}
+
+message GetMembersByWorkspaceRequest {
+  string user_id = 1;        // acting user
+  string workspace_id = 2;   // target workspace
+}
+
+message GetMemberByIdRequest {
+  string workspace_id = 1;   // workspace context
+  string id = 2;             // member id
+}
+
+message GetMembersOverviewRequest {
+  string user_id = 1;        // acting user
+  string workspace_id = 2;   // target workspace
+  util.SearchQuery params = 3;
+}
+
+message UpdateMemberRequest {
+  string user_id = 1;        // acting user
+  string workspace_id = 2;   // workspace context
+  string id = 3;             // member id
+  UpdateWorkspaceMemberDto dto = 4;
+}
+
+message DeleteMemberRequest {
+  string user_id = 1;        // acting user
+  string workspace_id = 2;   // workspace context
+  string id = 3;             // member id
+}
+
+message DeleteMemberResponse {
+  bool success = 1;
+}
+
+message IsMemberRequest {
+  string user_id = 1;        // user to check
+  string workspace_id = 2;   // workspace context
+}
+
+message IsMemberResponse {
+  bool is_member = 1;
+}
+
+message GetUserRoleRequest {
+  string user_id = 1;        // user to check
+  string workspace_id = 2;   // workspace context
+}
+
+message GetUserRoleResponse {
+  optional workspace.v1.WorkspaceRole role = 1;
+}
+
+message HasRightRequest {
+  string user_id = 1;        // acting user
+  string workspace_id = 2;   // workspace context
+  string action = 3;         // e.g., "read", "write"
+  string resource = 4;       // e.g., "workspace", "project"
+}
+
+message HasRightResponse {
+  bool has_right = 1;
+}
+
+// ============================================================================
+// SERVICE
+// ============================================================================
+
+service WorkspaceMembers {
+  rpc AddMember (AddMemberRequest) returns (WorkspaceMemberDto);
+  rpc GetByWorkspaceId (GetMembersByWorkspaceRequest) returns (WorkspaceMembersList);
+  rpc GetById (GetMemberByIdRequest) returns (WorkspaceMemberDto);
+  rpc GetOverview (GetMembersOverviewRequest) returns (WorkspaceMembersList);
+  rpc UpdateMember (UpdateMemberRequest) returns (WorkspaceMemberDto);
+  rpc DeleteMember (DeleteMemberRequest) returns (DeleteMemberResponse);
+  rpc IsMember (IsMemberRequest) returns (IsMemberResponse);
+  rpc GetUserRole (GetUserRoleRequest) returns (GetUserRoleResponse);
+  rpc HasRight (HasRightRequest) returns (HasRightResponse);
+}

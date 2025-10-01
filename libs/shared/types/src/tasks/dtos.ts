@@ -397,3 +397,111 @@ export class TaskListDto extends BasePaginationDto<TaskOverview> {
   })
   items!: TaskOverview[];
 }
+
+// Prisma select types for type-safe queries
+export const TaskOverviewSelect = {
+  id: true,
+  title: true,
+  status: true,
+  priority: true,
+} as const;
+
+export const TaskDtoSelect = {
+  id: true,
+  title: true,
+  description: true,
+  epic_id: true,
+  status: true,
+  priority: true,
+  estimated_hours: true,
+  actual_hours: true,
+  due_date: true,
+  completed_at: true,
+  created_at: true,
+  updated_at: true,
+  created_by: true,
+  updated_by: true,
+  created_by_user: {
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      first_name: true,
+      last_name: true,
+      avatar_url: true,
+    },
+  },
+  updated_by_user: {
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      first_name: true,
+      last_name: true,
+      avatar_url: true,
+    },
+  },
+  epic: {
+    select: {
+      id: true,
+      title: true,
+      progress: true,
+      status: true,
+      category: true,
+    },
+  },
+} as const;
+
+export const TaskListSelect = {
+  ...TaskOverviewSelect,
+} as const;
+
+// Type helpers for Prisma query return types
+export type PrismaTaskOverview = {
+  id: number;
+  title: string;
+  status: string;
+  priority: number;
+};
+
+export type PrismaTaskDto = {
+  id: number;
+  title: string;
+  description: string | null;
+  epic_id: number;
+  status: string;
+  priority: number;
+  estimated_hours: number | null;
+  actual_hours: number | null;
+  due_date: Date | null;
+  completed_at: Date | null;
+  created_at: Date | null;
+  updated_at: Date | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_by_user: {
+    id: string;
+    username: string;
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    avatar_url: string | null;
+  } | null;
+  updated_by_user: {
+    id: string;
+    username: string;
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    avatar_url: string | null;
+  } | null;
+  epic: {
+    id: number;
+    title: string;
+    progress: number;
+    status: string;
+    category: string;
+  } | null;
+};
+
+export type PrismaTaskList = PrismaTaskOverview[];

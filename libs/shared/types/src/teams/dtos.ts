@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsBoolean, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength, IsEnum } from "class-validator";
+import { Expose } from "class-transformer";
 import { ProfileOverview } from "../profile/dtos";
 import { ProjectOverview } from "../projects/dtos";
 import { BasePaginationDto } from "../common/page";
@@ -12,6 +13,7 @@ export enum TeamRole {
 }
 
 export class CreateTeamDto {
+  @Expose()
   @ApiProperty({
     description: "ID du workspace",
     format: "uuid",
@@ -20,6 +22,7 @@ export class CreateTeamDto {
   @IsUUID()
   workspace_id!: string;
 
+  @Expose()
   @ApiProperty({
     description: "Nom de l'équipe",
     example: "Development Team",
@@ -29,6 +32,7 @@ export class CreateTeamDto {
   @MaxLength(255)
   name!: string;
 
+  @Expose()
   @ApiProperty({
     description: "Description de l'équipe",
     required: false,
@@ -38,6 +42,7 @@ export class CreateTeamDto {
   @IsString()
   description?: string;
 
+  @Expose()
   @ApiProperty({
     description: "URL de l'avatar de l'équipe",
     required: false,
@@ -86,52 +91,66 @@ export class UpdateTeamDto {
 }
 
 export class TeamOverview {
+  @Expose()
   @ApiProperty({
     description: "ID de l'équipe",
     example: "team-uuid-123",
   })
+  @Expose()
   id!: string;
 
+  @Expose()
   @ApiProperty({
     description: "Nom de l'équipe",
     example: "Development Team",
   })
+  @Expose()
   name!: string;
 
+  @Expose()
   @ApiProperty({
     description: "Slug de l'équipe",
     example: "dev-team",
   })
+  @Expose()
   slug!: string;
 
+  @Expose()
   @ApiProperty({
     description: "Description de l'équipe",
     required: false,
     example: "Core development team responsible for backend and frontend development",
   })
+  @Expose()
   description?: string;
 
+  @Expose()
   @ApiProperty({
     description: "L'équipe est active",
     example: true,
   })
+  @Expose()
   is_active!: boolean;
 
+  @Expose()
   @ApiProperty({
     description: "URL de l'avatar de l'équipe",
     required: false,
     example: "https://example.com/teams/dev-team-avatar.png",
   })
+  @Expose()
   avatar_url?: string;
 }
 
 export class TeamDto extends TeamOverview {
+  @Expose()
   @ApiProperty({
     description: "Date de création",
     example: "2024-01-15T10:00:00Z",
   })
   created_at!: Date;
 
+  @Expose()
   @ApiProperty({
     description: "Date de dernière modification",
     required: false,
@@ -139,6 +158,7 @@ export class TeamDto extends TeamOverview {
   })
   updated_at?: Date;
 
+  @Expose()
   @ApiProperty({
     description: "ID de l'utilisateur qui a créé l'équipe",
     required: false,
@@ -146,6 +166,7 @@ export class TeamDto extends TeamOverview {
   })
   created_by?: string;
 
+  @Expose()
   @ApiProperty({
     description: "ID de l'utilisateur qui a modifié l'équipe",
     required: false,
@@ -179,6 +200,7 @@ export class TeamDto extends TeamOverview {
 }
 
 export class TeamListDto extends BasePaginationDto<TeamDto | TeamOverview> {
+  @Expose()
   @ApiProperty({
     type: [TeamDto],
     description: "Array of task overview objects",
@@ -187,6 +209,7 @@ export class TeamListDto extends BasePaginationDto<TeamDto | TeamOverview> {
 }
 
 export class AddTeamMemberDto {
+  @Expose()
   @ApiProperty({
     description: "ID de l'utilisateur à ajouter",
     format: "uuid",
@@ -217,12 +240,14 @@ export class UpdateTeamMemberDto {
 }
 
 export class TeamMemberOverview {
+  @Expose()
   @ApiProperty({
     description: "ID du membre de l'équipe",
     example: "member-uuid-123",
   })
   id!: string;
 
+  @Expose()
   @ApiProperty({
     description: "Rôle du membre dans l'équipe",
     enum: TeamRole,
@@ -230,29 +255,25 @@ export class TeamMemberOverview {
   })
   role!: TeamRole;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Informations sur l'utilisateur",
     type: ProfileOverview,
   })
-  user?: ProfileOverview;
+  profile?: ProfileOverview;
 }
 
 export class TeamMemberDto extends TeamMemberOverview {
+  @Expose()
   @ApiProperty({
     description: "Date d'ajout à l'équipe",
     example: "2024-01-15T10:00:00Z",
   })
   created_at!: Date;
-
-  @ApiProperty({
-    description: "ID de l'utilisateur qui a ajouté le membre",
-    required: false,
-    example: "user-uuid-101",
-  })
-  created_by?: string;
 }
 
 export class TeamMemberListDto extends BasePaginationDto<TeamMemberDto | TeamMemberOverview> {
+  @Expose()
   @ApiProperty({
     type: [TeamMemberDto],
     description: "Array of team member overview objects",

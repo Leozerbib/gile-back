@@ -1,0 +1,157 @@
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from "@nestjs/common";
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { ProjectsGatewayService } from "libs/shared/utils/src/client/project/projects.client";
+import { Auth, CurrentUser } from "../auth-gateway/auth.decorators";
+import type { AuthenticatedUser } from "@shared/types";
+import { CreateProjectDto, UpdateProjectDto, ProjectDto, ProjectsListDto, TeamOverview, BaseSearchQueryDto } from "@shared/types";
+import { normalizeObject, normalizeWithRequiredFields } from "@shared/utils";
+
+@ApiTags("Projects")
+@Controller("projects")
+export class ProjectsGatewayController {
+  constructor(private readonly projects: ProjectsGatewayService) {}
+
+  @Get()
+  @Auth()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "List projects with search and pagination" })
+  @ApiQuery({ name: "workspace_id", required: true, schema: { type: "string" } })
+  @ApiQuery({ name: "search", required: false, schema: { type: "string", nullable: true } })
+  @ApiQuery({ name: "skip", required: false, schema: { type: "integer", minimum: 0, default: 0, nullable: true } })
+  @ApiQuery({ name: "take", required: false, schema: { type: "integer", minimum: 1, default: 25, nullable: true } })
+  @ApiQuery({ name: "_sort", required: false, schema: { type: "string", example: "createdAt|updatedAt|name|status|priority|progress", nullable: true } })
+  @ApiQuery({ name: "_order", required: false, schema: { type: "string", example: "asc|desc", nullable: true } })
+  @ApiOkResponse({ type: ProjectsListDto })
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query("workspace_id") workspaceId: string,
+    @Query("search") search?: string,
+    @Query("skip") skip?: string,
+    @Query("take") take?: string,
+    @Query("_sort") sort?: string,
+    @Query("_order") order?: string,
+  ): Promise<ProjectsListDto> {
+    if (!workspaceId) {
+      throw new BadRequestException("workspace_id is required");
+    }
+    const isNullish = (v?: string) => v == null || v === "" || v.toLowerCase?.() === "null";
+    const params: BaseSearchQueryDto = {
+      search: !isNullish(search) ? search : undefined,
+      skip: !isNullish(skip) ? Number(skip) : undefined,
+      take: !isNullish(take) ? Number(take) : undefined,
+      sortBy: !isNullish(sort)
+        ? [
+            {
+              field: String(sort),
+              order: order?.toUpperCase() === "ASC" || order?.toUpperCase() === "DESC" ? (order.toUpperCase() as "ASC" | "DESC") : ("DESC" as const),
+            },
+          ]
+        : undefined,
+    } as BaseSearchQueryDto;
+
+    const result = await this.projects.search(user.user_id, workspaceId, params);
+    return normalizeObject(result) as ProjectsListDto;
+  }
+
+  @Get("overview")
+  @Auth()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get projects overview for a workspace" })
+  @ApiQuery({ name: "workspace_id", required: true, schema: { type: "string" } })
+  @ApiQuery({ name: "search", required: false, schema: { type: "string", nullable: true } })
+  @ApiQuery({ name: "skip", required: false, schema: { type: "integer", minimum: 0, default: 0, nullable: true } })
+  @ApiQuery({ name: "take", required: false, schema: { type: "integer", minimum: 1, default: 10, nullable: true } })
+  @ApiOkResponse({ type: ProjectsListDto })
+  async overview(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query("workspace_id") workspaceId: string,
+    @Query("search") search?: string,
+    @Query("skip") skip?: string,
+    @Query("take") take?: string,
+  ): Promise<ProjectsListDto> {
+    if (!workspaceId) {
+      throw new BadRequestException("workspace_id is required");
+    }
+    const s = Number(skip);
+    const t = Number(take);
+    const params: BaseSearchQueryDto = {
+      search: search || undefined,
+      skip: !Number.isNaN(s) ? s : 0,
+      take: !Number.isNaN(t) ? t : 10,
+    } as BaseSearchQueryDto;
+    const res = await this.projects.getOverview(user.user_id, workspaceId, params);
+    return res;
+  }
+
+  @Get(":id")
+  @Auth()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get a project by ID" })
+  @ApiOkResponse({ type: ProjectDto })
+  async get(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): Promise<ProjectDto> {
+    const projectId = Number(id);
+    if (Number.isNaN(projectId)) {
+      throw new BadRequestException(`Invalid id param: ${id}`);
+    }
+    const result = await this.projects.findById(user.user_id, projectId);
+    return normalizeObject(result) as ProjectDto;
+  }
+
+  @Get(":id/team")
+  @Auth()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get the team of a project" })
+  @ApiOkResponse({ type: TeamOverview })
+  async getTeam(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): Promise<TeamOverview> {
+    const projectId = Number(id);
+    if (Number.isNaN(projectId)) {
+      throw new BadRequestException(`Invalid id param: ${id}`);
+    }
+    const res = await this.projects.getTeam(user.user_id, projectId);
+    return normalizeWithRequiredFields(res, ["id", "name", "slug", "is_active"]);
+  }
+
+  @Post()
+  @Auth()
+  @ApiBearerAuth()
+  @HttpCode(201)
+  @ApiOperation({ summary: "Create a new project" })
+  @ApiQuery({ name: "workspace_id", required: true, schema: { type: "string" } })
+  @ApiBody({ type: CreateProjectDto })
+  @ApiOkResponse({ type: ProjectDto })
+  async create(@CurrentUser() user: AuthenticatedUser, @Query("workspace_id") workspaceId: string, @Body() body: CreateProjectDto) {
+    if (!workspaceId) {
+      throw new BadRequestException("workspace_id is required");
+    }
+    const result = await this.projects.create(user.user_id, workspaceId, body);
+    return normalizeObject(result) as ProjectDto;
+  }
+
+  @Put(":id")
+  @Auth()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Update a project by ID" })
+  @ApiBody({ type: UpdateProjectDto })
+  @ApiOkResponse({ type: ProjectDto })
+  async update(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() body: UpdateProjectDto) {
+    const projectId = Number(id);
+    if (Number.isNaN(projectId)) {
+      throw new BadRequestException(`Invalid id param: ${id}`);
+    }
+    const result = await this.projects.update(user.user_id, projectId, body);
+    return normalizeObject(result) as ProjectDto;
+  }
+
+  @Delete(":id")
+  @Auth()
+  @ApiBearerAuth()
+  @HttpCode(204)
+  @ApiOperation({ summary: "Delete a project by ID" })
+  async remove(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+    const projectId = Number(id);
+    if (Number.isNaN(projectId)) {
+      throw new BadRequestException(`Invalid id param: ${id}`);
+    }
+    await this.projects.remove(user.user_id, projectId);
+  }
+}

@@ -24,15 +24,18 @@ message UpdateProfileRequest {
   string avatar_url = 5;
 }
 
+message InsertProfileResponse {
+  bool success = 1;
+}
+
 message Profile {
-  string id = 1;
   string user_id = 2;
   string username = 3;
   string first_name = 4;
   string last_name = 5;
   string avatar_url = 6;
   string created_at = 7; // ISO8601
-  string updated_at = 8; // ISO8601
+  optional string updated_at = 8; // ISO8601
 }
 
 message ProfileOverview {
@@ -43,11 +46,16 @@ message ProfileOverview {
 
 message ProfilesList {
   repeated Profile items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
 }
 
 service ProfileService {
   rpc GetByUserId (GetByUserIdRequest) returns (Profile);
   rpc GetAll (ListProfilesRequest) returns (ProfilesList);
-  rpc Insert (InsertProfileRequest) returns (Profile);
+  rpc Insert (InsertProfileRequest) returns (InsertProfileResponse);
   rpc Update (UpdateProfileRequest) returns (Profile);
 }

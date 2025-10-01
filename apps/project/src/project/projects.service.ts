@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from "@nestjs/common";
-import { ValidationError } from "@shared/errors";
+import { Injectable } from "@nestjs/common";
+import { RpcException } from "@nestjs/microservices";
+import { status } from "@grpc/grpc-js";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "@shared/prisma";
 import { LoggerClientService } from "@shared/logger";
@@ -18,10 +19,12 @@ import {
   ProjectOverview,
   TeamOverview,
   TeamOverviewSelect,
+  CreateTeamDto,
 } from "@shared/types";
 import { plainToInstance } from "class-transformer";
 import { WorkspaceMembersService } from "apps/workspace/src/member/workspace-members.service";
 import { TeamsService } from "apps/workspace/src/team/teams.service";
+import { TeamsGatewayService } from "libs/shared/utils/src/client/team/teams.client";
 
 /**
  * Service de gestion des projets
@@ -45,6 +48,7 @@ export class ProjectsService {
     private readonly loggerClient: LoggerClientService,
     private readonly workspaceMembersService: WorkspaceMembersService,
     private readonly teamService: TeamsService,
+    private readonly teamGatewayService: TeamsGatewayService,
   ) {}
 
   /**
@@ -75,11 +79,11 @@ export class ProjectsService {
         func: "projects.create",
         message: "Project creation failed: name is required",
       });
-      throw new ValidationError("Project name is required");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Project name is required" });
     }
 
     if (!workspaceId) {
-      throw new ValidationError("Workspace ID is required");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Workspace ID is required" });
     }
 
     // Vérifier que le workspace existe
@@ -89,12 +93,12 @@ export class ProjectsService {
     });
 
     if (!workspace) {
-      throw new NotFoundException(`Workspace with ID "${workspaceId}" not found`);
+      throw new RpcException({ code: status.NOT_FOUND, message: `Workspace with ID "${workspaceId}" not found` });
     }
 
     const hasPermission = await this.workspaceMembersService.hasRight(workspaceId, userId, "create", "project");
     if (!hasPermission) {
-      throw new UnauthorizedException("You don't have permission to create projects in this workspace");
+      throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to create projects in this workspace" });
     }
 
     // Générer le slug
@@ -112,58 +116,75 @@ export class ProjectsService {
     });
 
     if (existingProject) {
-      throw new ConflictException(`Project with slug "${slug}" already exists in this workspace`);
+      throw new RpcException({ code: status.ALREADY_EXISTS, message: `Project with slug "${slug}" already exists in this workspace` });
     }
 
     try {
-      // Utiliser une transaction pour créer le projet
-      const created = await this.prisma.$transaction(async tx => {
-        const project = await tx.projects.create({
-          data: {
-            name: dto.name.trim(),
-            slug,
-            description: dto.description?.trim() ?? null,
-            full_description: dto.full_description?.trim() ?? null,
-            workspace_id: workspaceId,
-            project_manager_id: dto.project_manager_id ?? userId,
-            status: ProjectStatus.TODO,
-            priority: (dto.priority as ProjectPriority) ?? ProjectPriority.MEDIUM,
-            progress: 0,
-            start_date: dto.start_date ? new Date(dto.start_date) : null,
-            end_date: dto.end_date ? new Date(dto.end_date) : null,
-            is_public: dto.is_public ?? false,
-            settings: dto.settings ?? {},
-            custom_fields: dto.custom_fields ?? {},
-            created_by: userId,
-            updated_by: userId,
+      const project = await this.prisma.projects.create({
+        data: {
+          name: dto.name.trim(),
+          slug,
+          description: dto.description?.trim() ?? null,
+          full_description: dto.full_description?.trim() ?? null,
+          workspace_id: workspaceId,
+          project_manager_id: userId,
+          status: ProjectStatus.TODO,
+          priority: (dto.priority as ProjectPriority) ?? ProjectPriority.MEDIUM,
+          progress: 0,
+          start_date: dto.start_date ? new Date(dto.start_date) : null,
+          end_date: dto.end_date ? new Date(dto.end_date) : null,
+          is_public: dto.is_public ?? false,
+          created_by: userId,
+          updated_by: userId,
+        },
+        include: {
+          manager: {
+            select: ProfileOverviewSelect,
           },
-          include: {
-            manager: {
-              select: ProfileOverviewSelect,
-            },
-            created_by_user: {
-              select: ProfileOverviewSelect,
-            },
-            updated_by_user: {
-              select: ProfileOverviewSelect,
-            },
+          created_by_user: {
+            select: ProfileOverviewSelect,
           },
-        });
-
-        return project;
+          updated_by_user: {
+            select: ProfileOverviewSelect,
+          },
+        },
       });
+
+      if (!project) {
+        throw new Error("Failed to create project");
+      }
+
+      if (dto.team_id) {
+        const teamExists = await this.teamService.exist(dto.team_id);
+        if (!teamExists) {
+          throw new RpcException({ code: status.NOT_FOUND, message: `Team with ID "${dto.team_id}" not found` });
+        }
+        await this.assignTeam(project.id, dto.team_id, userId);
+      } else {
+        const createTeam: CreateTeamDto = {
+          name: project.name + " Team",
+          description: "Team for project " + project.name,
+          avatar_url: undefined,
+          workspace_id: workspaceId,
+        };
+        const created_team = await this.teamGatewayService.create(workspaceId, userId, createTeam);
+        if (!created_team) {
+          throw new Error("Failed to create team for project");
+        }
+        await this.assignTeam(project.id, created_team.id, userId);
+      }
 
       await this.loggerClient.log({
         level: "info",
         service: "project",
         func: "projects.create",
-        message: `Project created successfully with ID: ${created.id}`,
-        data: { id: created.id, name: created.name },
+        message: `Project created successfully with ID: ${project.id}`,
+        data: { id: project.id, name: project.name },
       });
 
-      return plainToInstance(ProjectDto, created, { excludeExtraneousValues: true });
+      return plainToInstance(ProjectDto, project, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof ConflictException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -196,12 +217,12 @@ export class ProjectsService {
     });
 
     if (!workspace) {
-      throw new NotFoundException(`Workspace with ID "${workspaceId}" not found`);
+      throw new RpcException({ code: status.NOT_FOUND, message: `Workspace with ID "${workspaceId}" not found` });
     }
 
     const hasPermission = await this.workspaceMembersService.hasRight(workspaceId, userId, "get", "project");
     if (!hasPermission) {
-      throw new UnauthorizedException("You don't have permission to read projects in this workspace");
+      throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to read projects in this workspace" });
     }
 
     // Base where clause: only active projects by default
@@ -245,6 +266,7 @@ export class ProjectsService {
       for (const [key, value] of Object.entries(params.filters)) {
         const mappedKey = filterMapping[key] ?? key;
         // Basic equals filter; extend as needed
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         prismaFilters[mappedKey] = value;
       }
       where = SearchQueryBuilder.applyFilters(where, prismaFilters);
@@ -342,23 +364,23 @@ export class ProjectsService {
       });
 
       if (!item) {
-        throw new NotFoundException(`Project with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Project with ID "${id}" not found` });
       }
 
       if (userId) {
         const hasPermission = await this.workspaceMembersService.hasRight(item.workspace_id, userId, "get", "project");
         if (!hasPermission) {
-          throw new UnauthorizedException("You don't have permission to view this project");
+          throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to view this project" });
         }
       } else {
         if (!item.is_public) {
-          throw new UnauthorizedException("You don't have permission to view this project");
+          throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to view this project" });
         }
       }
 
       return plainToInstance(ProjectDto, item, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -450,7 +472,7 @@ export class ProjectsService {
 
     // Validation des données d'entrée
     if (!dto || Object.keys(dto).length === 0) {
-      throw new ValidationError("No data provided for update");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "No data provided for update" });
     }
 
     try {
@@ -461,12 +483,12 @@ export class ProjectsService {
       });
 
       if (!existingProject) {
-        throw new NotFoundException(`Project with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Project with ID "${id}" not found` });
       }
 
       const hasPermission = await this.workspaceMembersService.hasRight(existingProject.workspace_id, updatedBy, "update", "project");
       if (!hasPermission) {
-        throw new UnauthorizedException("You don't have permission to update this project");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to update this project" });
       }
 
       // Vérifier l'unicité du slug si le nom est modifié
@@ -485,7 +507,7 @@ export class ProjectsService {
         });
 
         if (slugConflict) {
-          throw new ConflictException(`Project with slug "${newSlug}" already exists in this workspace`);
+          throw new RpcException({ code: status.ALREADY_EXISTS, message: `Project with slug "${newSlug}" already exists in this workspace` });
         }
       }
 
@@ -541,9 +563,6 @@ export class ProjectsService {
 
       return plainToInstance(ProjectDto, updated, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException || error instanceof ValidationError) {
-        throw error;
-      }
       if (error instanceof Error) {
         await this.loggerClient.log({
           level: "error",
@@ -584,12 +603,12 @@ export class ProjectsService {
       });
 
       if (!existingProject) {
-        throw new NotFoundException(`Project with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Project with ID "${id}" not found` });
       }
 
       const hasPermission = await this.workspaceMembersService.hasRight(existingProject.workspace_id, deletedBy, "delete", "project");
       if (!hasPermission) {
-        throw new UnauthorizedException("You don't have permission to delete this project");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to delete this project" });
       }
 
       // Supprimer le projet (les relations seront supprimées automatiquement grâce aux contraintes CASCADE)
@@ -607,7 +626,7 @@ export class ProjectsService {
 
       return { success: true };
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -650,12 +669,12 @@ export class ProjectsService {
       });
 
       if (!project) {
-        throw new NotFoundException(`Project with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Project with ID "${id}" not found` });
       }
 
       const hasPermission = await this.workspaceMembersService.hasRight(project.workspace_id, userId, "get", "project");
       if (!hasPermission) {
-        throw new UnauthorizedException("You don't have permission to view this project's team");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to view this project's team" });
       }
 
       // Récupérer les équipes associées au projet
@@ -669,19 +688,22 @@ export class ProjectsService {
       });
 
       if (!projectTeams) {
-        throw new NotFoundException(`No team found for project with ID "${id}"`);
+        throw new RpcException({ code: status.INTERNAL, message: `No team found for project with ID "${id}"` });
       }
+
+      const team = projectTeams.team;
 
       await this.loggerClient.log({
         level: "info",
         service: "project",
         func: "projects.getTeam",
         message: `Retrieved team for project: ${id}`,
+        data: team,
       });
 
-      return plainToInstance(TeamOverview, projectTeams.team, { excludeExtraneousValues: true });
+      return plainToInstance(TeamOverview, team, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -691,6 +713,104 @@ export class ProjectsService {
           func: "projects.getTeam",
           message: `Failed to get project team: ${error.message}`,
           data: { error: error.message, id, userId },
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Assigne une équipe à un projet
+   *
+   * @param projectId ID du projet
+   * @param teamId ID de l'équipe à assigner
+   * @param userId ID de l'utilisateur qui effectue l'assignation
+   * @returns Résultat de l'assignation
+   * @throws NotFoundException si le projet ou l'équipe n'existe pas
+   * @throws ConflictException si l'équipe est déjà assignée au projet
+   * @throws UnauthorizedException si l'utilisateur n'a pas les droits
+   */
+  async assignTeam(projectId: number, teamId: string, userId: string): Promise<{ success: boolean; message: string }> {
+    await this.loggerClient.log({
+      level: "debug",
+      service: "project",
+      func: "projects.assignTeam",
+      message: `Assigning team ${teamId} to project ${projectId}`,
+      data: { projectId, teamId, userId },
+    });
+
+    try {
+      // Vérifier que le projet existe
+      const project = await this.prisma.projects.findUnique({
+        where: { id: projectId },
+        select: { id: true, workspace_id: true, name: true },
+      });
+
+      if (!project) {
+        throw new RpcException({ code: status.NOT_FOUND, message: `Project with ID "${projectId}" not found` });
+      }
+
+      // Vérifier les permissions
+      const hasPermission = await this.workspaceMembersService.hasRight(project.workspace_id, userId, "assign", "project");
+      if (!hasPermission) {
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to assign teams to this project" });
+      }
+
+      // Vérifier que l'équipe existe et appartient au même workspace
+      const team = await this.prisma.teams.findUnique({
+        where: { id: teamId },
+        select: { id: true, workspace_id: true, name: true },
+      });
+
+      if (!team) {
+        throw new RpcException({ code: status.NOT_FOUND, message: `Team with ID "${teamId}" not found` });
+      }
+
+      if (team.workspace_id !== project.workspace_id) {
+        throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Team and project must belong to the same workspace" });
+      }
+
+      // Vérifier si l'équipe est déjà assignée au projet
+      const existingAssignment = await this.prisma.project_teams.findFirst({
+        where: {
+          project_id: projectId,
+          team_id: teamId,
+        },
+      });
+
+      if (existingAssignment) {
+        throw new RpcException({ code: status.ALREADY_EXISTS, message: "Team is already assigned to this project" });
+      }
+
+      // Créer l'assignation
+      await this.prisma.project_teams.create({
+        data: {
+          project_id: projectId,
+          team_id: teamId,
+          created_by: userId,
+        },
+      });
+
+      await this.loggerClient.log({
+        level: "info",
+        service: "project",
+        func: "projects.assignTeam",
+        message: `Team ${team.name} successfully assigned to project ${project.name}`,
+        data: { projectId, teamId, projectName: project.name, teamName: team.name },
+      });
+
+      return {
+        success: true,
+        message: `Team "${team.name}" has been successfully assigned to project "${project.name}"`,
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        await this.loggerClient.log({
+          level: "error",
+          service: "project",
+          func: "projects.assignTeam",
+          message: `Failed to assign team to project: ${error.message}`,
+          data: { error: error.message, projectId, teamId, userId },
         });
       }
       throw error;

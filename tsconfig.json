@@ -15,13 +15,27 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      "@shared/types": ["libs/shared/types/src"],
-      "@shared/errors": ["libs/shared/errors/src"],
-      "@shared/logger": ["libs/shared/logger/src"],
-      "@shared/utils": ["libs/shared/utils/src"],
-      "@shared/prisma": ["libs/shared/prisma/src"],
-      "@shared/prisma/*": ["libs/shared/prisma/src/*"],
-      "@proto": ["libs/proto/index.ts"]
+      "@proto": [
+        "libs/proto/index.ts"
+      ],
+      "@shared/errors": [
+        "libs/shared/errors/src"
+      ],
+      "@shared/logger": [
+        "libs/shared/logger/src"
+      ],
+      "@shared/prisma": [
+        "libs/shared/prisma/src"
+      ],
+      "@shared/prisma/*": [
+        "libs/shared/prisma/src/*"
+      ],
+      "@shared/types": [
+        "libs/shared/types/src"
+      ],
+      "@shared/utils": [
+        "libs/shared/utils/src"
+      ]
     },
     "incremental": true,
     "skipLibCheck": true,

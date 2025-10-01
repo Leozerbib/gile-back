@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from "@nestjs/common";
-import { ValidationError } from "@shared/errors";
-import { Prisma } from "@prisma/client";
+import { Injectable } from "@nestjs/common";
+import { RpcException } from "@nestjs/microservices";
+import { status } from "@grpc/grpc-js";
+import { Prisma, TeamRole } from "@prisma/client";
 import { PrismaService } from "@shared/prisma";
 import { LoggerClientService } from "@shared/logger";
 import { WorkspaceMembersService } from "../member/workspace-members.service";
@@ -40,16 +41,24 @@ export class TeamsService {
    * @throws ConflictException Si une équipe avec le même nom existe déjà
    * @throws UnauthorizedException Si l'utilisateur n'a pas les droits
    */
-  async create(userId: string, dto: CreateTeamDto): Promise<TeamDto> {
-    const isInWorkspace = await this.workspaceMembersService.isMember(dto.workspace_id, userId);
+  async create(userId: string, workspaceId: string, dto: CreateTeamDto): Promise<TeamDto> {
+    const isInWorkspace = await this.workspaceMembersService.isMember(workspaceId, userId);
     if (!isInWorkspace) {
-      throw new UnauthorizedException("Vous n'avez pas les droits pour créer une équipe dans ce workspace");
+      throw new RpcException({ code: status.PERMISSION_DENIED, message: "Vous n'avez pas les droits pour créer une équipe dans ce workspace" });
     }
 
     // Vérification des droits
     const hasPermission = await this.workspaceMembersService.hasRight(dto.workspace_id, userId, "create", "team");
     if (!hasPermission) {
-      throw new UnauthorizedException("Vous n'avez pas les droits pour créer une équipe dans ce workspace");
+      throw new RpcException({ code: status.PERMISSION_DENIED, message: "Vous n'avez pas les droits pour créer une équipe dans ce workspace" });
+    }
+
+    // Basic validation
+    if (!dto?.name?.trim()) {
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Team name is required" });
+    }
+    if (!workspaceId?.trim()) {
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Workspace ID is required" });
     }
 
     // Génération du slug unique
@@ -66,7 +75,7 @@ export class TeamsService {
         });
 
         if (existingTeam) {
-          throw new ConflictException(`Une équipe avec le nom "${dto.name}" existe déjà dans ce workspace`);
+          throw new RpcException({ code: status.ALREADY_EXISTS, message: `Une équipe avec le nom "${dto.name}" existe déjà dans ce workspace` });
         }
 
         // Création de l'équipe
@@ -79,6 +88,13 @@ export class TeamsService {
             avatar_url: dto.avatar_url,
             is_active: true,
             created_by: userId,
+            members: {
+              create: {
+                user_id: userId,
+                role: TeamRole.LEADER,
+                created_by: userId,
+              },
+            },
           },
           include: {
             created_by_user: {
@@ -111,7 +127,7 @@ export class TeamsService {
           message: "Erreur lors de la création de l'équipe",
           data: { error: error.message, dto, userId },
         });
-        throw new ValidationError("Impossible de créer l'équipe: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Impossible de créer l'équipe: " + error.message });
       }
       throw error;
     }
@@ -126,10 +142,10 @@ export class TeamsService {
    * @throws NotFoundException Si l'équipe n'existe pas
    * @throws UnauthorizedException Si l'utilisateur n'a pas les droits
    */
-  async getById(id: string, userId: string): Promise<TeamDto> {
+  async getById(workspace_id: string, id: string, userId: string): Promise<TeamDto> {
     try {
       const team = await this.prisma.teams.findUnique({
-        where: { id },
+        where: { id, workspace_id },
         include: {
           created_by_user: {
             select: ProfileOverviewSelect,
@@ -148,18 +164,18 @@ export class TeamsService {
       });
 
       if (!team) {
-        throw new NotFoundException(`Équipe avec l'ID ${id} non trouvée`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Équipe avec l'ID ${id} non trouvée` });
       }
 
       // Vérification des droits
       const hasPermission = await this.workspaceMembersService.hasRight(team.workspace_id, userId, "get", "team");
       if (!hasPermission) {
-        throw new UnauthorizedException("Vous n'avez pas les droits pour consulter cette équipe");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "Vous n'avez pas les droits pour consulter cette équipe" });
       }
 
       return plainToInstance(TeamDto, team);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -171,7 +187,7 @@ export class TeamsService {
           data: { error: error.message, id, userId },
         });
 
-        throw new ValidationError("Impossible de récupérer l'équipe: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Impossible de récupérer l'équipe: " + error.message });
       }
       throw error;
     }
@@ -195,12 +211,12 @@ export class TeamsService {
     try {
       const isInWorkspace = await this.workspaceMembersService.isMember(workspace_id, userId);
       if (!isInWorkspace) {
-        throw new UnauthorizedException("Your are not member of this workspace");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You are not member of this workspace" });
       }
       // Vérification des droits
       const hasPermission = await this.workspaceMembersService.hasRight(workspace_id, userId, "get", "team");
       if (!hasPermission) {
-        throw new UnauthorizedException("You dont have permission to get the teams in this workspace");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You dont have permission to get the teams in this workspace" });
       }
 
       const [team, total] = await this.prisma.$transaction([
@@ -216,7 +232,7 @@ export class TeamsService {
       ]);
 
       if (!team) {
-        throw new NotFoundException(`No team found with in this workspace: ${workspace_id}`);
+        throw new RpcException({ code: status.INTERNAL, message: `No team found with in this workspace: ${workspace_id}` });
       }
 
       return BasePaginationDto.create(
@@ -227,7 +243,7 @@ export class TeamsService {
         TeamListDto,
       );
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -239,7 +255,7 @@ export class TeamsService {
           data: { error: error.message, workspace_id, userId },
         });
 
-        throw new ValidationError("Impossible de récupérer l'aperçu de l'équipe: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Impossible de récupérer l'aperçu de l'équipe: " + error.message });
       }
       throw error;
     }
@@ -256,26 +272,26 @@ export class TeamsService {
    * @throws ConflictException Si le nouveau nom existe déjà
    * @throws UnauthorizedException Si l'utilisateur n'a pas les droits
    */
-  async update(id: string, userId: string, dto: UpdateTeamDto): Promise<TeamDto | null> {
+  async update(workspaceId: string, id: string, userId: string, dto: UpdateTeamDto): Promise<TeamDto | null> {
     try {
       const existingTeam = await this.prisma.teams.findUnique({
-        where: { id },
+        where: { id, workspace_id: workspaceId },
         select: { id: true, workspace_id: true, name: true },
       });
 
       if (!existingTeam) {
-        throw new NotFoundException(`Équipe avec l'ID ${id} non trouvée`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Équipe avec l'ID ${id} non trouvée` });
       }
 
-      const isInWorkspace = await this.workspaceMembersService.isMember(existingTeam.workspace_id, userId);
+      const isInWorkspace = await this.workspaceMembersService.isMember(workspaceId, userId);
       if (!isInWorkspace) {
-        throw new UnauthorizedException("You are not member of this workspace");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You are not member of this workspace" });
       }
 
       // Vérification des droits
-      const hasPermission = await this.workspaceMembersService.hasRight(existingTeam.workspace_id, userId, "update", "team");
+      const hasPermission = await this.workspaceMembersService.hasRight(workspaceId, userId, "update", "team");
       if (!hasPermission) {
-        throw new UnauthorizedException("You dont have permission to update this team");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You dont have permission to update this team" });
       }
 
       const updateData: Prisma.teamsUpdateInput = {
@@ -297,7 +313,7 @@ export class TeamsService {
         });
 
         if (nameExists) {
-          throw new ConflictException(`Une équipe avec le nom "${dto.name}" existe déjà dans ce workspace`);
+          throw new RpcException({ code: status.ALREADY_EXISTS, message: `Une équipe avec le nom "${dto.name}" existe déjà dans ce workspace` });
         }
 
         updateData.name = dto.name;
@@ -332,9 +348,6 @@ export class TeamsService {
 
       return plainToInstance(TeamDto, updatedTeam);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ConflictException || error instanceof UnauthorizedException) {
-        throw error;
-      }
       if (error instanceof Error) {
         await this.loggerClient.log({
           level: "error",
@@ -344,7 +357,7 @@ export class TeamsService {
           data: { error: error.message, id, userId, dto },
         });
 
-        throw new ValidationError("Impossible de mettre à jour l'équipe: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Impossible de mettre à jour l'équipe: " + error.message });
       }
       return null;
     }
@@ -358,21 +371,21 @@ export class TeamsService {
    * @throws NotFoundException Si l'équipe n'existe pas
    * @throws UnauthorizedException Si l'utilisateur n'a pas les droits
    */
-  async delete(id: string, userId: string): Promise<void> {
+  async delete(workspaceId: string, id: string, userId: string): Promise<void> {
     try {
       const team = await this.prisma.teams.findUnique({
-        where: { id },
+        where: { id, workspace_id: workspaceId },
         select: { id: true, workspace_id: true, name: true },
       });
 
       if (!team) {
-        throw new NotFoundException(`Équipe avec l'ID ${id} non trouvée`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Équipe avec l'ID ${id} non trouvée` });
       }
 
       // Vérification des droits
-      const hasPermission = await this.workspaceMembersService.hasRight(team.workspace_id, userId, "delete", "team");
+      const hasPermission = await this.workspaceMembersService.hasRight(workspaceId, userId, "delete", "team");
       if (!hasPermission) {
-        throw new UnauthorizedException("You dont have permission to delete this team");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You dont have permission to delete this team" });
       }
 
       await this.prisma.$transaction(async tx => {
@@ -395,7 +408,7 @@ export class TeamsService {
         data: { teamId: id, userId },
       });
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -407,8 +420,36 @@ export class TeamsService {
           data: { error: error.message, id, userId },
         });
 
-        throw new ValidationError("Impossible de supprimer l'équipe: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Impossible de supprimer l'équipe: " + error.message });
       }
+    }
+  }
+
+  /**
+   * Vérifie si une équipe existe par son ID
+   *
+   * @param id ID de l'équipe à vérifier
+   * @returns true si l'équipe existe, false sinon
+   */
+  async exist(id: string): Promise<boolean> {
+    try {
+      const team = await this.prisma.teams.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+
+      return team !== null;
+    } catch (error) {
+      if (error instanceof Error) {
+        await this.loggerClient.log({
+          level: "error",
+          service: "teams",
+          func: "exist",
+          message: "Erreur lors de la vérification de l'existence de l'équipe",
+          data: { error: error.message, id },
+        });
+      }
+      return false;
     }
   }
 

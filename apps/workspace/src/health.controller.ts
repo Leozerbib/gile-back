@@ -8,7 +8,7 @@ export class HealthController {
 
   @GrpcMethod("Health", "Check")
   async check(data: { service?: string }): Promise<{ status: string }> {
-    await this.logger.log({ level: "info", service: "workspace", func: "health.check", message: "I am ALIVE!!!" });
+    await this.logger.log({ level: "info", service: data.service || "workspace", func: "health.check", message: "I am ALIVE!!!" });
     return { status: "SERVING" };
   }
 }

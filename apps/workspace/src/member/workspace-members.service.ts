@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, ConflictException, UnauthorizedException, ForbiddenException } from "@nestjs/common";
-import { ValidationError } from "@shared/errors";
+import { Injectable } from "@nestjs/common";
+import { RpcException } from "@nestjs/microservices";
+import { status } from "@grpc/grpc-js";
 import { Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "@shared/prisma";
 import { LoggerClientService } from "@shared/logger";
@@ -55,7 +56,7 @@ export class WorkspaceMembersService {
       service: "workspace",
       func: "workspace-members.create",
       message: `Adding member to workspace: ${workspaceId}`,
-      data: { workspaceId, userId: dto.userId, role: dto.role, addedBy },
+      data: { workspaceId, dto, addedBy },
     });
 
     // Check authorization - user must have permission to add members
@@ -63,7 +64,7 @@ export class WorkspaceMembersService {
       const hasPermission = await this.hasRight(workspaceId, addedBy, "create", "member");
 
       if (!hasPermission) {
-        throw new UnauthorizedException("You don't have permission to add members to this workspace");
+        throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to add members to this workspace" });
       }
     }
 
@@ -75,7 +76,7 @@ export class WorkspaceMembersService {
         func: "workspace-members.create",
         message: "Member creation failed: userId is required",
       });
-      throw new ValidationError("User ID is required");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "User ID is required" });
     }
 
     try {
@@ -85,30 +86,26 @@ export class WorkspaceMembersService {
       });
 
       if (!workspace) {
-        throw new NotFoundException(`Workspace with ID "${workspaceId}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Workspace with ID "${workspaceId}" not found` });
       }
 
       // Vérifier que l'utilisateur existe
       const user = await this.prisma.profiles.findUnique({
         where: { user_id: dto.userId },
-      });
-
-      if (!user) {
-        throw new NotFoundException(`User with ID "${dto.userId}" not found`);
-      }
-
-      // Vérifier que l'utilisateur n'est pas déjà membre
-      const existingMember = await this.prisma.workspace_members.findUnique({
-        where: {
-          workspace_id_user_id: {
-            workspace_id: workspaceId,
-            user_id: dto.userId,
-          },
+        select: {
+          user_id: true,
         },
       });
 
-      if (existingMember) {
-        throw new ConflictException(`User "${dto.userId}" is already a member of workspace "${workspaceId}"`);
+      if (!user) {
+        throw new RpcException({ code: status.NOT_FOUND, message: `User with ID "${dto.userId}" not found` });
+      }
+
+      // Vérifier que l'utilisateur n'est pas déjà membre
+      const isMember = await this.isMember(workspaceId, dto.userId);
+
+      if (isMember) {
+        throw new RpcException({ code: status.ALREADY_EXISTS, message: `User "${dto.userId}" is already a member of workspace "${workspaceId}"` });
       }
 
       const created = await this.prisma.workspace_members.create({
@@ -131,7 +128,7 @@ export class WorkspaceMembersService {
 
       return plainToInstance(WorkspaceMemberDto, created, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof ConflictException || error instanceof NotFoundException || error instanceof ValidationError) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -162,12 +159,12 @@ export class WorkspaceMembersService {
       });
 
       if (!item) {
-        throw new NotFoundException(`Workspace member with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Workspace member with ID "${id}" not found` });
       }
 
       return plainToInstance(WorkspaceMemberDto, item, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof NotFoundException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -251,7 +248,7 @@ export class WorkspaceMembersService {
 
     // Validation des données d'entrée
     if (!dto || Object.keys(dto).length === 0) {
-      throw new ValidationError("No data provided for update");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "No data provided for update" });
     }
 
     try {
@@ -264,7 +261,7 @@ export class WorkspaceMembersService {
       });
 
       if (!existingMember) {
-        throw new NotFoundException(`Workspace member with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Workspace member with ID "${id}" not found` });
       }
 
       // Check authorization - user must have permission to update members
@@ -272,13 +269,13 @@ export class WorkspaceMembersService {
         const hasPermission = await this.hasRight(existingMember.workspace_id, updatedBy, "update", "member");
 
         if (!hasPermission) {
-          throw new UnauthorizedException("You don't have permission to update workspace members");
+          throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to update workspace members" });
         }
       }
 
       // Empêcher la modification du propriétaire du workspace
       if (existingMember.workspace.owner_id === existingMember.user_id && dto.role && dto.role !== WorkspaceRole.WORKSPACE_OWNER) {
-        throw new ForbiddenException("Cannot change the role of the workspace owner");
+        throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Cannot change the role of the workspace owner" });
       }
 
       // Préparer les données de mise à jour
@@ -307,9 +304,6 @@ export class WorkspaceMembersService {
 
       return plainToInstance(WorkspaceMemberDto, updated, { excludeExtraneousValues: true });
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ValidationError || error instanceof ForbiddenException || error instanceof UnauthorizedException) {
-        throw error;
-      }
       if (error instanceof Error) {
         await this.loggerClient.log({
           level: "error",
@@ -355,7 +349,7 @@ export class WorkspaceMembersService {
       });
 
       if (!existingMember) {
-        throw new NotFoundException(`Workspace member with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Workspace member with ID "${id}" not found` });
       }
 
       // Check authorization - user must have permission to delete members
@@ -363,13 +357,13 @@ export class WorkspaceMembersService {
         const hasPermission = await this.hasRight(existingMember.workspace_id, deletedBy, "delete", "member");
 
         if (!hasPermission) {
-          throw new UnauthorizedException("You don't have permission to remove workspace members");
+          throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to remove workspace members" });
         }
       }
 
       // Empêcher la suppression du propriétaire du workspace
       if (existingMember.role === WorkspaceRole.WORKSPACE_OWNER || existingMember.role === WorkspaceRole.WORKSPACE_ADMIN || existingMember.role === WorkspaceRole.SUPER_ADMIN) {
-        throw new ForbiddenException("Cannot remove the workspace owner, admin, or super admin");
+        throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Cannot remove the workspace owner, admin, or super admin" });
       }
 
       // Supprimer le membre
@@ -387,9 +381,6 @@ export class WorkspaceMembersService {
 
       return { success: true };
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof ForbiddenException || error instanceof UnauthorizedException) {
-        throw error;
-      }
       if (error instanceof Error) {
         await this.loggerClient.log({
           level: "error",
@@ -476,6 +467,16 @@ export class WorkspaceMembersService {
     }
   }
 
+  async hasMember(workspaceId: string): Promise<boolean> {
+    const count = await this.prisma.workspace_members.count({
+      where: {
+        workspace_id: workspaceId,
+      },
+    });
+
+    return count > 0;
+  }
+
   /**
    * Vérifie si un utilisateur a les droits pour effectuer une action sur une ressource
    * @param workspaceId - ID du workspace
@@ -487,12 +488,15 @@ export class WorkspaceMembersService {
   async hasRight(
     workspaceId: string,
     userId: string,
-    action: "create" | "get" | "update" | "delete",
+    action: "create" | "get" | "update" | "delete" | "assign",
     resource: "workspace" | "project" | "label" | "agent" | "prompt" | "member" | "team",
   ): Promise<boolean> {
     const role = await this.getUserRole(workspaceId, userId);
     if (role === null) {
-      return false;
+      if (await this.hasMember(workspaceId)) {
+        return false;
+      }
+      return true;
     }
     // Super admin a tous les droits
     if (role === WorkspaceRole.SUPER_ADMIN) {
@@ -541,7 +545,7 @@ export class WorkspaceMembersService {
         case "workspace":
           return action === "get"; // Lecture seule
         case "project":
-          return action !== "delete"; // Peut créer, lire, modifier mais pas supprimer
+          return action !== "delete" && action !== "assign"; // Peut créer, lire, modifier mais pas supprimer
         case "label":
           return action !== "delete"; // Peut créer, lire, modifier mais pas supprimer
         case "agent":
@@ -563,7 +567,7 @@ export class WorkspaceMembersService {
         case "workspace":
           return action === "get"; // Lecture seule
         case "project":
-          return action !== "delete"; // Peut créer, lire, modifier mais pas supprimer
+          return action !== "delete" && action !== "assign"; // Peut créer, lire, modifier mais pas supprimer
         case "label":
           return true; // Tous droits sur les labels (important pour l'UI)
         case "agent":

@@ -52,23 +52,6 @@ export class CreateWorkspaceDto {
   name!: string;
 
   @ApiPropertyOptional({
-    description: "Slug URL-friendly (généré automatiquement si omis)",
-    example: "mon-espace-de-travail",
-    type: "string",
-    minLength: 3,
-    maxLength: 255,
-    pattern: "^[a-z0-9-]+$",
-    required: false,
-  })
-  @Expose()
-  @IsOptional()
-  @IsString({ message: "Le slug doit être une chaîne de caractères" })
-  @MinLength(3, { message: "Le slug doit contenir au moins 3 caractères" })
-  @MaxLength(255, { message: "Le slug ne peut pas dépasser 255 caractères" })
-  @Transform(({ value }): string | undefined => (typeof value === "string" ? value.toLowerCase().trim() : value))
-  slug?: string;
-
-  @ApiPropertyOptional({
     description: "Description détaillée du workspace",
     example: "Workspace dédié au développement d'applications web modernes avec méthodologies agiles",
     type: "string",
@@ -484,17 +467,6 @@ export class WorkspaceMemberDto {
   id!: string;
 
   @ApiProperty({
-    description: "Identifiant du workspace",
-    example: "b3fb243f-8368-47aa-bcc7-072f049db8af",
-    format: "uuid",
-    type: "string",
-    required: true,
-  })
-  @Expose()
-  @IsString({ message: "L'ID du workspace doit être une chaîne de caractères" })
-  workspace_id!: string;
-
-  @ApiProperty({
     description: "Identifiant de l'utilisateur",
     example: "b3fb243f-8368-47aa-bcc7-072f049db8af",
     format: "uuid",
@@ -653,7 +625,6 @@ export const WorkspaceDtoSelect = {
  */
 export const WorkspaceMemberDtoSelect = {
   id: true,
-  workspace_id: true,
   user_id: true,
   role: true,
   is_active: true,

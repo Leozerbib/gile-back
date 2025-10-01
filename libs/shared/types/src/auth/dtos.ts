@@ -85,6 +85,48 @@ export class AuthRegisterRequestDto {
     message: "Le mot de passe doit contenir au moins une minuscule, une majuscule, un chiffre et un caractère spécial",
   })
   password!: string;
+
+  @ApiProperty({
+    description: "Nom d'utilisateur unique",
+    example: "johndoe",
+    minLength: 3,
+    maxLength: 32,
+    required: true,
+  })
+  @Expose()
+  @IsString({ message: "Le nom d'utilisateur doit être une chaîne de caractères" })
+  @IsNotEmpty({ message: "Le nom d'utilisateur est requis" })
+  @MinLength(3, { message: "Le nom d'utilisateur doit contenir au moins 3 caractères" })
+  @MaxLength(32, { message: "Le nom d'utilisateur ne peut pas dépasser 32 caractères" })
+  username: string;
+
+  @ApiProperty({
+    description: "Firstname d'utilisateur unique",
+    example: "john",
+    minLength: 3,
+    maxLength: 32,
+    required: true,
+  })
+  @Expose()
+  @IsString({ message: "Le Firstname doit être une chaîne de caractères" })
+  @IsNotEmpty({ message: "Le Firstname est requis" })
+  @MinLength(3, { message: "Le Firstname doit contenir au moins 3 caractères" })
+  @MaxLength(32, { message: "Le Firstname ne peut pas dépasser 32 caractères" })
+  first_name: string;
+
+  @ApiProperty({
+    description: "Lastname d'utilisateur unique",
+    example: "doe",
+    minLength: 3,
+    maxLength: 32,
+    required: true,
+  })
+  @Expose()
+  @IsString({ message: "Le Lastname doit être une chaîne de caractères" })
+  @IsNotEmpty({ message: "Le Lastname est requis" })
+  @MinLength(3, { message: "Le Lastname doit contenir au moins 3 caractères" })
+  @MaxLength(32, { message: "Le Lastname ne peut pas dépasser 32 caractères" })
+  last_name: string;
 }
 
 /**
@@ -409,4 +451,43 @@ export class AuthVerifyResponseDto {
   @Expose()
   @IsString({ message: "La raison doit être une chaîne de caractères" })
   reason!: string;
+}
+
+/**
+ * DTO pour la requête de vérification OTP par email
+ * Compatible avec Supabase auth.verifyOtp et gRPC AuthService
+ * Utilisé pour vérifier le code OTP envoyé par email
+ */
+export class AuthVerifyOtpRequestDto {
+  @ApiProperty({
+    description: "Adresse email de l'utilisateur",
+    example: "leospoutnik@gmail.com",
+    format: "email",
+    type: "string",
+    minLength: 5,
+    maxLength: 255,
+    required: true,
+  })
+  @Expose()
+  @IsEmail({}, { message: "L'adresse email doit être valide" })
+  @IsNotEmpty({ message: "L'adresse email est requise" })
+  @Length(5, 255, { message: "L'email doit contenir entre 5 et 255 caractères" })
+  @Transform(({ value }): string => (typeof value === "string" ? value.toLowerCase().trim() : value))
+  email!: string;
+
+  @ApiProperty({
+    description: "Code OTP à 6 chiffres",
+    example: "123456",
+    type: "string",
+    minLength: 6,
+    maxLength: 6,
+    pattern: "^[0-9]{6}$",
+    required: true,
+  })
+  @Expose()
+  @IsString({ message: "Le code OTP doit être une chaîne de caractères" })
+  @IsNotEmpty({ message: "Le code OTP est requis" })
+  @Length(6, 6, { message: "Le code OTP doit contenir exactement 6 caractères" })
+  @Matches(/^[0-9]{6}$/, { message: "Le code OTP doit contenir uniquement 6 chiffres" })
+  otp!: string;
 }

@@ -19,7 +19,6 @@ async function bootstrap() {
         longs: String,
         enums: String,
         defaults: true,
-        oneofs: true,
         includeDirs: [join(process.cwd(), "libs/proto")],
       },
     },

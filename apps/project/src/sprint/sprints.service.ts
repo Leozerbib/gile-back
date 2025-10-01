@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, NotFoundException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { LoggerClientService } from "@shared/logger";
 import { PrismaService } from "@shared/prisma";
 import {
@@ -15,6 +15,8 @@ import {
 import { Prisma } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
 import { ProjectsService } from "../project/projects.service";
+import { RpcException } from "@nestjs/microservices";
+import { status } from "@grpc/grpc-js";
 
 @Injectable()
 export class SprintsService {
@@ -34,20 +36,18 @@ export class SprintsService {
     });
 
     if (!dto.name) {
-      throw new BadRequestException("name is required");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "name is required" });
     }
 
     try {
-      // Validate start_date
-      if (!dto.start_date) {
-        throw new BadRequestException("start_date is required");
-      }
-
       // Validate project exists and user has access
       await this.projectsService.getById(dto.project_id, ownerId);
 
-      // Calculate end_date based on start_date + duration_days (safely)
       const startDate = new Date(dto.start_date);
+      let endDate: Date | null = null;
+      if (dto.end_date) {
+        endDate = new Date(dto.end_date);
+      }
 
       // Generate slug from name
       const slug = dto.name
@@ -62,6 +62,7 @@ export class SprintsService {
           slug: slug,
           description: dto.description,
           start_date: startDate,
+          end_date: endDate,
           version: dto.version ?? 1,
           status: dto.status || SprintStatus.PLANNED,
           project_id: dto.project_id,
@@ -89,33 +90,33 @@ export class SprintsService {
 
         switch (error?.code) {
           case "P2002":
-            throw new BadRequestException("Sprint name already exists for this project.");
+            throw new RpcException({ code: status.ALREADY_EXISTS, message: "Sprint name already exists for this project." });
           case "P2003":
-            throw new BadRequestException("Invalid project ID provided.");
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid project ID provided." });
           case "P2025":
-            throw new BadRequestException("Sprint with this ID does not exist.");
+            throw new RpcException({ code: status.NOT_FOUND, message: "Sprint with this ID does not exist." });
           default:
-            throw new BadRequestException("An error occurred while creating the sprint. Please try again.");
+            throw new RpcException({ code: status.INTERNAL, message: "An error occurred while creating the sprint. Please try again." });
         }
       }
       throw error;
     }
   }
 
-  async findAll(userId: string, query: BaseSearchQueryDto): Promise<SprintsListDto> {
+  async search(params: BaseSearchQueryDto = {} as BaseSearchQueryDto): Promise<SprintsListDto> {
     await this.logger.log({
       level: "info",
       service: "project",
-      func: "sprints.findAll",
-      message: `Fetching sprints for user ${userId}`,
-      data: query,
+      func: "sprints.search",
+      message: `Fetching sprints with filters`,
+      data: params,
     });
 
     try {
       // Extract pagination parameters
-      const { search, sortBy, filters } = query;
-      const skip = query.skip ?? 0;
-      const take = query.take ?? 50;
+      const { search, sortBy, filters } = params;
+      const skip = params.skip ?? 0;
+      const take = params.take ?? 50;
 
       // Build base where clause
       let where: Prisma.sprintsWhereInput = {};
@@ -139,27 +140,6 @@ export class SprintsService {
             where.status = { in: filters.status };
           } else {
             where.status = filters.status as SprintStatus;
-          }
-        }
-
-        // Date range filters
-        if (filters.start_date_from || filters.start_date_to) {
-          where.start_date = {};
-          if (filters.start_date_from) {
-            where.start_date.gte = new Date(filters.start_date_from);
-          }
-          if (filters.start_date_to) {
-            where.start_date.lte = new Date(filters.start_date_to);
-          }
-        }
-
-        if (filters.end_date_from || filters.end_date_to) {
-          where.end_date = {};
-          if (filters.end_date_from) {
-            where.end_date.gte = new Date(filters.end_date_from);
-          }
-          if (filters.end_date_to) {
-            where.end_date.lte = new Date(filters.end_date_to);
           }
         }
 
@@ -196,7 +176,7 @@ export class SprintsService {
       await this.logger.log({
         level: "info",
         service: "project",
-        func: "sprints.findAll",
+        func: "sprints.search",
         message: `Successfully fetched ${itemsRaw.length} sprints out of ${total}`,
         data: { count: itemsRaw.length, total, skip, take },
       });
@@ -211,27 +191,27 @@ export class SprintsService {
         await this.logger.log({
           level: "error",
           service: "project",
-          func: "sprints.findAll",
+          func: "sprints.search",
           message: `Error fetching sprints: ${error?.message}`,
-          data: { userId, query, stack: error?.stack, code: error?.code },
+          data: { params, stack: error?.stack, code: error?.code },
         });
 
         switch (error?.code) {
           case "P2003":
-            throw new BadRequestException("Invalid project ID provided.");
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid project ID provided." });
           default:
-            throw new BadRequestException("An error occurred while fetching sprints. Please try again.");
+            throw new RpcException({ code: status.INTERNAL, message: "An error occurred while fetching sprints. Please try again." });
         }
       }
       throw error;
     }
   }
 
-  async findById(id: string, userId?: string): Promise<SprintDto | null> {
+  async getById(id: string, userId?: string): Promise<SprintDto> {
     await this.logger.log({
       level: "debug",
       service: "project",
-      func: "sprints.findById",
+      func: "sprints.getById",
       message: `Fetching sprint with id ${id}`,
       data: { userId },
     });
@@ -241,11 +221,11 @@ export class SprintsService {
       await this.logger.log({
         level: "warn",
         service: "project",
-        func: "sprints.findById",
+        func: "sprints.getById",
         message: `Invalid identifier provided: ${id}`,
         data: { userId },
       });
-      throw new BadRequestException("Invalid identifier");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid identifier" });
     }
 
     try {
@@ -266,37 +246,36 @@ export class SprintsService {
           message: `Sprint not found with id ${id}`,
           data: { userId },
         });
-        throw new NotFoundException("Sprint not found");
+        throw new RpcException({ code: status.NOT_FOUND, message: "Sprint not found" });
       }
 
       await this.logger.log({
         level: "debug",
         service: "project",
-        func: "sprints.findById",
+        func: "sprints.getById",
         message: `Sprint found successfully`,
         data: { sprintId: sprint.id, sprintName: sprint.name, userId },
       });
 
       return plainToInstance(SprintDto, sprint);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      if (error instanceof RpcException) {
         throw error;
       }
-
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         await this.logger.log({
           level: "error",
           service: "project",
-          func: "sprints.findById",
+          func: "sprints.getById",
           message: `Error fetching sprint: ${error?.message}`,
           data: { id, userId, stack: error?.stack, code: error?.code },
         });
 
         switch (error?.code) {
           case "P2003":
-            throw new BadRequestException("Invalid project ID provided.");
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid project ID provided." });
           default:
-            throw new BadRequestException("An error occurred while fetching the sprint. Please try again.");
+            throw new RpcException({ code: status.INTERNAL, message: "An error occurred while fetching the sprint. Please try again." });
         }
       }
       throw error;
@@ -331,7 +310,7 @@ export class SprintsService {
     ]);
 
     if (!sprint) {
-      throw new NotFoundException("Sprint not found");
+      throw new RpcException({ code: status.NOT_FOUND, message: "Sprint not found" });
     }
     // Simulate overview logic
     return BasePaginationDto.create(
@@ -379,24 +358,24 @@ export class SprintsService {
     });
 
     if (!sprint) {
-      throw new NotFoundException("Sprint not found");
+      throw new RpcException({ code: status.NOT_FOUND, message: "Sprint not found" });
     }
 
     return plainToInstance(SprintDto, sprint);
   }
 
-  async update(id: string, dto: UpdateSprintDto, ownerId: string): Promise<SprintDto> {
+  async update(id: string, dto: UpdateSprintDto, updatedBy?: string): Promise<SprintDto> {
     await this.logger.log({
       level: "info",
       service: "project",
       func: "sprints.update",
-      message: `Updating sprint ${id} for user ${ownerId}`,
-      data: dto,
+      message: `Updating sprint ${id}`,
+      data: { dto, updatedBy },
     });
 
     const sprintId = Number(id);
     if (Number.isNaN(sprintId)) {
-      throw new BadRequestException("Invalid identifier");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid identifier" });
     }
 
     try {
@@ -415,7 +394,7 @@ export class SprintsService {
           capacity: dto.capacity,
           review_notes: dto.review_notes,
           retrospective_notes: dto.retrospective_notes,
-          updated_by: ownerId,
+          updated_by: updatedBy,
         },
         include: {
           project: true,
@@ -432,29 +411,29 @@ export class SprintsService {
           service: "project",
           func: "sprints.update",
           message: `Error updating sprint: ${error?.message}`,
-          data: { id: sprintId, dto, userId: ownerId, stack: error?.stack, code: error?.code },
+          data: { id: sprintId, dto, updatedBy, stack: error?.stack, code: error?.code },
         });
 
         switch (error?.code) {
           case "P2025":
-            throw new NotFoundException("Sprint not found");
+            throw new RpcException({ code: status.NOT_FOUND, message: "Sprint not found" });
           case "P2002":
-            throw new BadRequestException("Sprint name already exists for this project.");
+            throw new RpcException({ code: status.ALREADY_EXISTS, message: "Sprint name already exists for this project." });
           case "P2003":
-            throw new BadRequestException("Invalid project ID provided.");
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid project ID provided." });
           default:
-            throw new BadRequestException("An error occurred while updating the sprint. Please try again.");
+            throw new RpcException({ code: status.INTERNAL, message: "An error occurred while updating the sprint. Please try again." });
         }
       }
       throw error;
     }
   }
 
-  async remove(id: string, userId?: string): Promise<boolean> {
+  async delete(id: string, userId?: string): Promise<boolean> {
     await this.logger.log({
       level: "info",
       service: "project",
-      func: "sprints.remove",
+      func: "sprints.delete",
       message: `Removing sprint ${id}`,
       data: { userId },
     });
@@ -468,7 +447,7 @@ export class SprintsService {
         message: `Invalid identifier provided: ${id}`,
         data: { userId },
       });
-      throw new BadRequestException("Invalid identifier");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid identifier" });
     }
 
     try {
@@ -477,7 +456,7 @@ export class SprintsService {
       await this.logger.log({
         level: "info",
         service: "project",
-        func: "sprints.remove",
+        func: "sprints.delete",
         message: `Sprint ${id} removed successfully`,
         data: { sprintId, userId },
       });
@@ -488,16 +467,16 @@ export class SprintsService {
         await this.logger.log({
           level: "error",
           service: "project",
-          func: "sprints.remove",
+          func: "sprints.delete",
           message: `Error removing sprint: ${error?.message}`,
           data: { id: sprintId, userId, stack: error?.stack, code: error?.code },
         });
 
         switch (error?.code) {
           case "P2025":
-            throw new NotFoundException("Sprint not found");
+            throw new RpcException({ code: status.NOT_FOUND, message: "Sprint not found" });
           default:
-            throw new BadRequestException("An error occurred while removing the sprint. Please try again.");
+            throw new RpcException({ code: status.INTERNAL, message: "An error occurred while removing the sprint. Please try again." });
         }
       }
       throw error;

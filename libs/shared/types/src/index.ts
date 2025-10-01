@@ -46,8 +46,7 @@ export interface LogEntry {
 
 // GRPC User type for authenticated requests
 export interface AuthenticatedUser {
-  userId: string;
-  email: string;
+  user_id: string;
 }
 
 // GRPC Message wrapper for authenticated requests

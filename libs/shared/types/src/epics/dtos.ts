@@ -462,3 +462,101 @@ export class EpicListDto extends BasePaginationDto<EpicOverview> {
   @Expose()
   items!: EpicOverview[];
 }
+
+// Prisma select types for type-safe queries
+export const EpicOverviewSelect = {
+  id: true,
+  title: true,
+  progress: true,
+  status: true,
+  category: true,
+} as const;
+
+export const EpicDtoSelect = {
+  id: true,
+  title: true,
+  slug: true,
+  description: true,
+  category: true,
+  status: true,
+  priority: true,
+  progress: true,
+  start_date: true,
+  end_date: true,
+  actual_end_date: true,
+  created_at: true,
+  updated_at: true,
+  created_by: true,
+  updated_by: true,
+  project_id: true,
+  created_by_user: {
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      first_name: true,
+      last_name: true,
+      avatar_url: true,
+    },
+  },
+  updated_by_user: {
+    select: {
+      id: true,
+      username: true,
+      email: true,
+      first_name: true,
+      last_name: true,
+      avatar_url: true,
+    },
+  },
+} as const;
+
+export const EpicListSelect = {
+  ...EpicOverviewSelect,
+} as const;
+
+// Type helpers for Prisma query return types
+export type PrismaEpicOverview = {
+  id: number;
+  title: string;
+  progress: number;
+  status: string;
+  category: string;
+};
+
+export type PrismaEpicDto = {
+  id: number;
+  title: string;
+  slug: string | null;
+  description: string | null;
+  category: string;
+  status: string;
+  priority: number;
+  progress: number;
+  start_date: Date | null;
+  end_date: Date | null;
+  actual_end_date: Date | null;
+  created_at: Date;
+  updated_at: Date | null;
+  created_by: string | null;
+  updated_by: string | null;
+  project_id: number;
+  created_by_user: {
+    id: string;
+    username: string;
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    avatar_url: string | null;
+  } | null;
+  updated_by_user: {
+    id: string;
+    username: string;
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    avatar_url: string | null;
+  } | null;
+};
+
+export type PrismaEpicList = PrismaEpicOverview[];

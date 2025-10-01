@@ -604,8 +604,8 @@ model tickets {
   priority             TicketPriority    @default(MEDIUM)
   category             TicketCategory    @default(TASK)
   story_points         Int?              @db.SmallInt
-  estimated_hours      Decimal?          @db.Decimal(5, 2)
-  actual_hours         Decimal?          @default(0) @db.Decimal(5, 2)
+  estimated_hours      Float?            @default(1) @db.Real
+  actual_hours         Float?            @default(1) @db.Real
   due_date             DateTime?         @db.Date
   completed_at         DateTime?         @db.Timestamptz(6)
   implementation_notes String?
@@ -686,13 +686,7 @@ model user_preferences {
   show_completed_tasks Boolean   @default(true)
   default_view         String    @default("kanban") @db.VarChar(50)
   items_per_page       Int       @default(25)
-  default_project_view String    @default("board") @db.VarChar(50)
-  favorite_projects    String[]  @default([])
-  pinned_projects      String[]  @default([])
-  dashboard_layout     Json?     @default("{}")
-  dashboard_widgets    Json?     @default("{}")
-  custom_shortcuts     Json?     @default("{}")
-  custom_filters       Json?     @default("{}")
+  default_workspace    String    @db.Uuid
   profile              profiles  @relation(fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_user_preferences_user")
 
   @@index([user_id], map: "idx_user_preferences_user")
@@ -749,6 +743,7 @@ model workspace_members {
   role            UserRole   @default(VIEWER)
   is_active       Boolean    @default(true)
   updated_by      String?    @db.Uuid
+  updated_at      DateTime?  @db.Timestamptz(6)
   created_by_user profiles?  @relation("workspace_members_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workflow_def_created_by")
   updated_by_user profiles?  @relation("workspace_members_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workflow_def_updated_by")
   profile         profiles   @relation(fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_workspace_members_user")

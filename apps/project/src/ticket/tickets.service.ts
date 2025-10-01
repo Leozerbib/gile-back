@@ -1,5 +1,6 @@
-import { Injectable, NotFoundException, ConflictException, UnauthorizedException } from "@nestjs/common";
-import { ValidationError } from "@shared/errors";
+import { Injectable } from "@nestjs/common";
+import { RpcException } from "@nestjs/microservices";
+import { status } from "@grpc/grpc-js";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "@shared/prisma";
 import { LoggerClientService } from "@shared/logger";
@@ -14,6 +15,10 @@ import {
   BaseSearchQueryDto,
   BasePaginationDto,
   ProfileOverviewSelect,
+  SprintOverviewSelect,
+  ProjectOverviewSelect,
+  LabelDtoSelect,
+  LabelDto,
 } from "@shared/types";
 import { plainToInstance } from "class-transformer";
 
@@ -47,7 +52,7 @@ export class TicketsService {
    * @throws NotFoundException Si le projet ou sprint n'existe pas
    * @throws UnauthorizedException Si l'utilisateur n'a pas les droits
    */
-  async create(userId: string, dto: CreateTicketDto): Promise<TicketDto> {
+  async create(userId: string, dto: CreateTicketDto): Promise<number> {
     await this.loggerClient.log({
       level: "debug",
       service: "project",
@@ -64,11 +69,11 @@ export class TicketsService {
         func: "tickets.create",
         message: "Ticket creation failed: title is required",
       });
-      throw new ValidationError("Title is required");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Title is required" });
     }
 
     if (!dto.project_id) {
-      throw new ValidationError("Project ID is required");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Project ID is required" });
     }
 
     try {
@@ -80,68 +85,110 @@ export class TicketsService {
         });
 
         if (!sprint) {
-          throw new NotFoundException(`Sprint with ID "${dto.sprint_id}" not found`);
+          await this.loggerClient.log({
+            level: "warn",
+            service: "project",
+            func: "tickets.create",
+            message: `Ticket creation failed: sprint with ID "${dto.sprint_id}" not found`,
+          });
+          throw new RpcException({ code: status.NOT_FOUND, message: `Sprint with ID "${dto.sprint_id}" not found` });
         }
 
         if (sprint.project_id !== dto.project_id) {
-          throw new ValidationError("Sprint does not belong to the specified project");
+          await this.loggerClient.log({
+            level: "warn",
+            service: "project",
+            func: "tickets.create",
+            message: `Ticket creation failed: sprint with ID "${dto.sprint_id}" does not belong to the specified project`,
+          });
+          throw new RpcException({ code: status.FAILED_PRECONDITION, message: "Sprint does not belong to the specified project" });
         }
       }
 
+      let parentTicket: number | null = null;
       // Vérifier le ticket parent si fourni
-      if (dto.parent_ticket_id) {
-        const parentTicket = await this.prisma.tickets.findUnique({
+      if (dto.parent_ticket_id && dto.parent_ticket_id !== 0) {
+        const parent = await this.prisma.tickets.findUnique({
           where: { id: dto.parent_ticket_id },
           select: { id: true, project_id: true },
         });
 
-        if (!parentTicket) {
-          throw new NotFoundException(`Parent ticket with ID "${dto.parent_ticket_id}" not found`);
-        }
-
-        if (parentTicket.project_id !== dto.project_id) {
-          throw new ValidationError("Parent ticket does not belong to the specified project");
+        if (!parent) {
+          parentTicket = null;
+        } else if (parent?.project_id !== dto.project_id) {
+          throw new RpcException({ code: status.FAILED_PRECONDITION, message: "Parent ticket does not belong to the specified project" });
+        } else {
+          parentTicket = parent.id;
         }
       }
 
-      const ticket = await this.prisma.tickets.create({
-        data: {
-          title: dto.title,
-          description: dto.description,
-          status: TicketStatus.TODO,
-          priority: (dto.priority as TicketPriority) || TicketPriority.MEDIUM,
-          category: (dto.category as TicketCategory) || TicketCategory.TASK,
-          story_points: dto.story_points,
-          estimated_hours: dto.estimated_hours ? Number(dto.estimated_hours) : null,
-          due_date: dto.due_date ? new Date(dto.due_date) : null,
-          project_id: dto.project_id,
-          sprint_id: dto.sprint_id,
-          parent_ticket_id: dto.parent_ticket_id,
-          task_id: dto.task_id || [],
-          created_by: userId,
-          updated_by: userId,
-        },
-        include: {
-          project: { select: { id: true, name: true, slug: true } },
-          sprint: { select: { id: true, name: true, version: true } },
-          assigned_to_user: { select: ProfileOverviewSelect },
-          created_by_user: { select: ProfileOverviewSelect },
-          updated_by_user: { select: ProfileOverviewSelect },
-          labels: { include: { label: { select: { id: true, name: true } } } },
-        },
+      const id = await this.prisma.$transaction(async tx => {
+        const id = await tx.tickets.create({
+          data: {
+            title: dto.title,
+            description: dto.description,
+            status: TicketStatus.TODO,
+            priority: (dto.priority as TicketPriority) || TicketPriority.MEDIUM,
+            category: (dto.category as TicketCategory) || TicketCategory.TASK,
+            story_points: dto.story_points,
+            estimated_hours: dto.estimated_hours ? Number(dto.estimated_hours) : null,
+            due_date: dto.due_date ? new Date(dto.due_date) : null,
+            project_id: dto.project_id,
+            sprint_id: dto.sprint_id,
+            parent_ticket_id: parentTicket,
+            task_id: dto.task_id || [],
+            created_by: userId,
+            assigned_to: userId,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        if (!id) {
+          await this.loggerClient.log({
+            level: "warn",
+            service: "project",
+            func: "tickets.create",
+            message: "Ticket creation failed: unable to create ticket",
+          });
+          throw new RpcException({ code: status.INTERNAL, message: "Unable to create ticket" });
+        }
+
+        if (dto.labels_id!.length > 0) {
+          // Vérifier l'existence des labels
+          for (const labelId of dto.labels_id!) {
+            const existingLabel = await tx.labels.findUnique({
+              where: { id: labelId },
+              select: { id: true },
+            });
+
+            if (existingLabel) {
+              await tx.ticket_labels.create({
+                data: {
+                  ticket_id: id.id,
+                  label_id: labelId,
+                  created_by: userId,
+                },
+              });
+            }
+          }
+        }
+
+        return id;
       });
 
       await this.loggerClient.log({
         level: "info",
         service: "project",
         func: "tickets.create",
-        message: `Ticket created successfully: ${ticket.title}`,
-        data: { ticketId: ticket.id, projectId: dto.project_id, userId },
+        message: `Ticket created successfully`,
+        data: { ticketId: id.id, projectId: dto.project_id, userId },
       });
 
-      return plainToInstance(TicketDto, ticket);
+      return id.id;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ValidationError) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -157,17 +204,17 @@ export class TicketsService {
         if ("code" in error) {
           const prismaError = error as Prisma.PrismaClientKnownRequestError;
           if (prismaError.code === "P2003") {
-            throw new ValidationError("Invalid foreign key reference");
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid foreign key reference" });
           }
           if (prismaError.code === "P2002") {
-            throw new ConflictException("Ticket with this identifier already exists");
+            throw new RpcException({ code: status.ALREADY_EXISTS, message: "Ticket with this identifier already exists" });
           }
           if (prismaError.code === "P2025") {
-            throw new NotFoundException("Referenced resource not found");
+            throw new RpcException({ code: status.NOT_FOUND, message: "Referenced resource not found" });
           }
         }
 
-        throw new ValidationError("Unable to create ticket: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to create ticket: " + error.message });
       }
       throw error;
     }
@@ -208,11 +255,6 @@ export class TicketsService {
         if (Array.isArray(filters.sprint_ids) && filters.sprint_ids.length) where.sprint_id = { in: filters.sprint_ids };
         else if (typeof filters.sprint_id === "number") where.sprint_id = filters.sprint_id;
         if (Array.isArray(filters.status_in) && filters.status_in.length) where.status = { in: filters.status_in };
-        else if (filters.status && filters.status.trim()) where.status = filters.status.trim();
-        if (Array.isArray(filters.priority_in) && filters.priority_in.length) where.priority = { in: filters.priority_in };
-        else if (filters.priority && filters.priority.trim()) where.priority = filters.priority.trim();
-        if (Array.isArray(filters.category_in) && filters.category_in.length) where.category = { in: filters.category_in };
-        else if (filters.category && filters.category.trim()) where.category = filters.category.trim();
         if (Array.isArray(filters.assign_to_in) && filters.assign_to_in.length) where.assigned_to = { in: filters.assign_to_in };
         if (Array.isArray(filters.label_ids) && filters.label_ids.length) {
           where.labels = { some: { label_id: { in: filters.label_ids } } };
@@ -283,7 +325,7 @@ export class TicketsService {
 
       return BasePaginationDto.create(items, total, skip, take, TicketsListDto);
     } catch (error) {
-      if (error instanceof UnauthorizedException) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -295,7 +337,7 @@ export class TicketsService {
           data: { error: error.message, query, userId },
         });
 
-        throw new ValidationError("Unable to search tickets: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to search tickets: " + error.message });
       }
       throw error;
     }
@@ -310,7 +352,7 @@ export class TicketsService {
    * @throws NotFoundException Si le ticket n'existe pas
    * @throws UnauthorizedException Si l'utilisateur n'a pas les droits
    */
-  async getById(id: string, userId: string): Promise<TicketDto> {
+  async getById(id: number, userId: string): Promise<TicketDto> {
     await this.loggerClient.log({
       level: "debug",
       service: "project",
@@ -321,42 +363,50 @@ export class TicketsService {
 
     const ticketId = Number(id);
     if (Number.isNaN(ticketId)) {
-      throw new ValidationError("Invalid ticket identifier");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid ticket identifier" });
     }
 
     try {
       const ticket = await this.prisma.tickets.findUnique({
         where: { id: ticketId },
         include: {
-          project: { select: { id: true, name: true, slug: true, workspace_id: true } },
-          sprint: { select: { id: true, name: true, version: true } },
+          project: { select: ProjectOverviewSelect },
+          sprint: { select: SprintOverviewSelect },
           assigned_to_user: { select: ProfileOverviewSelect },
           created_by_user: { select: ProfileOverviewSelect },
           updated_by_user: { select: ProfileOverviewSelect },
-          labels: { include: { label: { select: { id: true, name: true } } } },
         },
       });
 
       if (!ticket) {
-        throw new NotFoundException(`Ticket with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Ticket with ID "${id}" not found` });
       }
 
       // TODO: Add workspace access validation
       // const hasPermission = await this.workspaceMembersService.hasRight(ticket.project.workspace_id, userId, "get", "project");
       // if (!hasPermission) {
-      //   throw new UnauthorizedException("You don't have permission to view this ticket");
+      //   throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to view this ticket" });
       // }
 
-      const transformedTicket = {
-        ...ticket,
-        estimated_hours: ticket.estimated_hours ? Number(ticket.estimated_hours) : null,
-        actual_hours: ticket.actual_hours ? Number(ticket.actual_hours) : null,
-        story_points: ticket.story_points ? Number(ticket.story_points) : null,
-      };
+      const ticketDto: TicketDto = plainToInstance(TicketDto, ticket);
 
-      return plainToInstance(TicketDto, transformedTicket);
+      const labels = await this.prisma.ticket_labels
+        .findMany({
+          where: {
+            ticket_id: ticket.id,
+          },
+          select: {
+            label: {
+              select: LabelDtoSelect,
+            },
+          },
+        })
+        .then(items => items.map(item => plainToInstance(LabelDto, item.label, { excludeExtraneousValues: true })));
+
+      ticketDto.labels = labels;
+      return ticketDto;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ValidationError) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -368,7 +418,7 @@ export class TicketsService {
           data: { error: error.message, id, userId },
         });
 
-        throw new ValidationError("Unable to retrieve ticket: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to retrieve ticket: " + error.message });
       }
       throw error;
     }
@@ -395,7 +445,7 @@ export class TicketsService {
 
     const ticketId = Number(id);
     if (Number.isNaN(ticketId)) {
-      throw new ValidationError("Invalid ticket identifier");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid ticket identifier" });
     }
 
     try {
@@ -408,13 +458,13 @@ export class TicketsService {
       });
 
       if (!existingTicket) {
-        throw new NotFoundException(`Ticket with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Ticket with ID "${id}" not found` });
       }
 
       // TODO: Add workspace access validation
       // const hasPermission = await this.workspaceMembersService.hasRight(existingTicket.project.workspace_id, userId, "update", "project");
       // if (!hasPermission) {
-      //   throw new UnauthorizedException("You don't have permission to update this ticket");
+      //   throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to update this ticket" });
       // }
 
       // Validation des références si elles sont modifiées
@@ -425,11 +475,11 @@ export class TicketsService {
         });
 
         if (!sprint) {
-          throw new NotFoundException(`Sprint with ID "${dto.sprint_id}" not found`);
+          throw new RpcException({ code: status.NOT_FOUND, message: `Sprint with ID "${dto.sprint_id}" not found` });
         }
 
         if (sprint.project_id !== existingTicket.project_id) {
-          throw new ValidationError("Sprint does not belong to the ticket's project");
+          throw new RpcException({ code: status.INTERNAL, message: "Sprint does not belong to the ticket's project" });
         }
       }
 
@@ -440,11 +490,11 @@ export class TicketsService {
         });
 
         if (!parentTicket) {
-          throw new NotFoundException(`Parent ticket with ID "${dto.parent_ticket_id}" not found`);
+          throw new RpcException({ code: status.NOT_FOUND, message: `Parent ticket with ID "${dto.parent_ticket_id}" not found` });
         }
 
         if (parentTicket.project_id !== existingTicket.project_id) {
-          throw new ValidationError("Parent ticket does not belong to the same project");
+          throw new RpcException({ code: status.INTERNAL, message: "Parent ticket does not belong to the same project" });
         }
       }
 
@@ -469,7 +519,9 @@ export class TicketsService {
       if (dto.sprint_id !== undefined) updateData.sprint = { connect: { id: dto.sprint_id } };
       if (dto.assigned_to !== undefined) updateData.assigned_to_user = { connect: { user_id: dto.assigned_to } };
       if (dto.ticket_number !== undefined) updateData.ticket_number = dto.ticket_number;
-      if (dto.parent_ticket_id !== undefined) updateData.ticket = { connect: { id: dto.parent_ticket_id } };
+      if (dto.parent_ticket_id !== undefined) {
+        updateData.ticket = dto.parent_ticket_id ? { connect: { id: dto.parent_ticket_id } } : { disconnect: true };
+      }
       if (dto.task_id !== undefined) updateData.task_id = dto.task_id;
 
       const updatedTicket = await this.prisma.tickets.update({
@@ -499,7 +551,7 @@ export class TicketsService {
 
       return plainToInstance(TicketDto, transformedTicket);
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ValidationError) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -515,17 +567,17 @@ export class TicketsService {
         if ("code" in error) {
           const prismaError = error as Prisma.PrismaClientKnownRequestError;
           if (prismaError.code === "P2025") {
-            throw new NotFoundException("Ticket not found");
+            throw new RpcException({ code: status.NOT_FOUND, message: "Ticket not found" });
           }
           if (prismaError.code === "P2003") {
-            throw new ValidationError("Invalid foreign key reference");
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid foreign key reference" });
           }
           if (prismaError.code === "P2002") {
-            throw new ConflictException("Ticket with this identifier already exists");
+            throw new RpcException({ code: status.ALREADY_EXISTS, message: "Ticket with this identifier already exists" });
           }
         }
 
-        throw new ValidationError("Unable to update ticket: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to update ticket: " + error.message });
       }
       throw error;
     }
@@ -551,7 +603,7 @@ export class TicketsService {
 
     const ticketId = Number(id);
     if (Number.isNaN(ticketId)) {
-      throw new ValidationError("Invalid ticket identifier");
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid ticket identifier" });
     }
 
     try {
@@ -564,13 +616,13 @@ export class TicketsService {
       });
 
       if (!existingTicket) {
-        throw new NotFoundException(`Ticket with ID "${id}" not found`);
+        throw new RpcException({ code: status.NOT_FOUND, message: `Ticket with ID "${id}" not found` });
       }
 
       // TODO: Add workspace access validation
       // const hasPermission = await this.workspaceMembersService.hasRight(existingTicket.project.workspace_id, userId, "delete", "project");
       // if (!hasPermission) {
-      //   throw new UnauthorizedException("You don't have permission to delete this ticket");
+      //   throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to delete this ticket" });
       // }
 
       await this.prisma.tickets.delete({
@@ -587,7 +639,7 @@ export class TicketsService {
 
       return true;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof UnauthorizedException || error instanceof ValidationError) {
+      if (error instanceof RpcException) {
         throw error;
       }
       if (error instanceof Error) {
@@ -603,14 +655,14 @@ export class TicketsService {
         if ("code" in error) {
           const prismaError = error as Prisma.PrismaClientKnownRequestError;
           if (prismaError.code === "P2025") {
-            throw new NotFoundException("Ticket not found");
+            throw new RpcException({ code: status.NOT_FOUND, message: "Ticket not found" });
           }
           if (prismaError.code === "P2014") {
-            throw new ValidationError("Cannot delete ticket with existing relations");
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Cannot delete ticket with existing relations" });
           }
         }
 
-        throw new ValidationError("Unable to delete ticket: " + error.message);
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to delete ticket: " + error.message });
       }
       throw error;
     }

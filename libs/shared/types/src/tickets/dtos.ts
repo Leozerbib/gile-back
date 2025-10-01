@@ -3,6 +3,7 @@ import { ProfileOverview } from "../profile/dtos";
 import { SprintOverview } from "../sprints/dtos";
 import { LabelDto } from "../labels/dtos";
 import { BasePaginationDto } from "../common/page";
+import { Expose } from "class-transformer";
 
 export enum TicketStatus {
   TODO = "TODO",
@@ -56,10 +57,13 @@ export class CreateTicketDto {
   sprint_id?: number;
 
   @ApiProperty({ example: "b3fb243f-8368-47aa-bcc7-072f049db8af", description: "Parent ticket ID", required: false })
-  parent_ticket_id?: number;
+  parent_ticket_id?: number | null;
 
   @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Task IDs", required: false })
   task_id?: number[];
+
+  @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Label IDs", required: false })
+  labels_id?: number[];
 }
 
 export class UpdateTicketDto {
@@ -109,74 +113,96 @@ export class UpdateTicketDto {
   ticket_number?: string;
 
   @ApiProperty({ example: 94, description: "Parent ticket ID", required: false })
-  parent_ticket_id?: number;
+  parent_ticket_id?: number | null;
 
   @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Task IDs", required: false })
   task_id?: number[];
+
+  @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Label IDs", required: false })
+  labels_id?: number[];
 }
 
 export class TicketOverview {
+  @Expose()
   @ApiProperty({ example: 93 })
   id!: number;
 
+  @Expose()
   @ApiProperty({ example: "PRO-0023" })
   ticket_number!: string;
 
+  @Expose()
   @ApiProperty({ example: "jjjj" })
   title!: string;
 
+  @Expose()
   @ApiProperty({ example: "TODO" })
   status!: string;
 
+  @Expose()
   @ApiProperty({ example: "MEDIUM" })
   priority!: string;
 
+  @Expose()
   @ApiProperty({ example: "TASK" })
   category!: string;
 }
 
 export class TicketDto extends TicketOverview {
+  @Expose()
   @ApiProperty({ type: [Number], example: [], required: false })
   task_id?: number[];
 
+  @Expose()
   @ApiProperty({ example: null, required: false })
-  parent_ticket_id?: number;
+  parent_ticket_id?: number | null;
 
+  @Expose()
   @ApiProperty({ example: null, required: false })
   description?: string;
 
+  @Expose()
   @ApiProperty({ example: 14, required: false })
   story_points?: number | null;
 
+  @Expose()
   @ApiProperty({ example: 0, required: false })
   estimated_hours?: number | null;
 
+  @Expose()
   @ApiProperty({ example: 0, required: false })
   actual_hours?: number | null;
 
+  @Expose()
   @ApiProperty({ example: null, required: false })
   due_date?: string;
 
+  @Expose()
   @ApiProperty({ example: null, required: false })
   completed_at?: string;
 
+  @Expose()
   @ApiProperty({ example: null, required: false })
   implementation_notes?: string;
 
+  @Expose()
   @ApiProperty({ example: null, required: false })
   testing_notes?: string;
 
+  @Expose()
   @ApiProperty({
     example: new Date(),
   })
   created_at!: Date;
 
+  @Expose()
   @ApiProperty({
     example: new Date(),
     required: false,
   })
   updated_at?: Date;
 
+  @Expose()
   @ApiProperty({
     type: SprintOverview,
     example: {
@@ -188,6 +214,7 @@ export class TicketDto extends TicketOverview {
   })
   sprint?: SprintOverview;
 
+  @Expose()
   @ApiProperty({
     type: ProfileOverview,
     example: {
@@ -199,6 +226,7 @@ export class TicketDto extends TicketOverview {
   })
   created_by_user?: ProfileOverview;
 
+  @Expose()
   @ApiProperty({
     type: ProfileOverview,
     example: {
@@ -210,6 +238,7 @@ export class TicketDto extends TicketOverview {
   })
   updated_by_user?: ProfileOverview;
 
+  @Expose()
   @ApiProperty({
     type: ProfileOverview,
     example: {
@@ -221,12 +250,13 @@ export class TicketDto extends TicketOverview {
   })
   assigned_to_user?: ProfileOverview;
 
+  @Expose()
   @ApiProperty({
     type: [Object],
     example: [
-      { id: 4, name: "API" },
-      { id: 3, name: "Database" },
-      { id: 2, name: "Backend" },
+      { id: 4, name: "API", color: "#4ECDC4" },
+      { id: 3, name: "Database", color: "#FF6B6B" },
+      { id: 2, name: "Backend", color: "#FF6B6B" },
     ],
     required: false,
   })
@@ -240,3 +270,212 @@ export class TicketsListDto extends BasePaginationDto<TicketDto> {
   })
   items!: TicketDto[];
 }
+
+// ============================================================================
+// PRISMA SELECT TYPES
+// ============================================================================
+
+/**
+ * Type de sélection Prisma pour TicketOverview
+ * Utilisé pour les listes et aperçus de tickets
+ */
+export const TicketOverviewSelect = {
+  id: true,
+  ticket_number: true,
+  title: true,
+  status: true,
+  priority: true,
+  category: true,
+} as const;
+
+/**
+ * Type de sélection Prisma pour TicketDto complet
+ * Inclut toutes les informations détaillées du ticket avec relations
+ */
+export const TicketDtoSelect = {
+  id: true,
+  ticket_number: true,
+  title: true,
+  status: true,
+  priority: true,
+  category: true,
+  task_id: true,
+  parent_ticket_id: true,
+  description: true,
+  story_points: true,
+  estimated_hours: true,
+  actual_hours: true,
+  due_date: true,
+  completed_at: true,
+  implementation_notes: true,
+  testing_notes: true,
+  created_at: true,
+  updated_at: true,
+} as const;
+
+/**
+ * Type de sélection Prisma pour les listes de tickets
+ * Optimisé pour les requêtes de pagination avec relations minimales
+ */
+export const TicketListSelect = {
+  id: true,
+  ticket_number: true,
+  title: true,
+  status: true,
+  priority: true,
+  category: true,
+  description: true,
+  story_points: true,
+  estimated_hours: true,
+  actual_hours: true,
+  due_date: true,
+  completed_at: true,
+  created_at: true,
+  updated_at: true,
+  sprint: {
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      status: true,
+    },
+  },
+  created_by_user: {
+    select: {
+      profiles: {
+        select: {
+          user_id: true,
+          username: true,
+          avatar_url: true,
+        },
+      },
+    },
+  },
+  assigned_to_user: {
+    select: {
+      profiles: {
+        select: {
+          user_id: true,
+          username: true,
+          avatar_url: true,
+        },
+      },
+    },
+  },
+} as const;
+
+// ============================================================================
+// TYPE HELPERS
+// ============================================================================
+
+/**
+ * Type helper pour extraire le type de retour d'une requête Prisma
+ * avec TicketOverviewSelect
+ */
+export type PrismaTicketOverview = {
+  id: number;
+  ticket_number: string;
+  title: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  category: TicketCategory;
+};
+
+/**
+ * Type helper pour extraire le type de retour d'une requête Prisma
+ * avec TicketDtoSelect
+ */
+export type PrismaTicketDto = {
+  id: number;
+  ticket_number: string;
+  title: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  category: TicketCategory;
+  task_id: number[] | null;
+  parent_ticket_id: number | null;
+  description: string | null;
+  story_points: number | null;
+  estimated_hours: number | null;
+  actual_hours: number | null;
+  due_date: Date | null;
+  completed_at: Date | null;
+  implementation_notes: string | null;
+  testing_notes: string | null;
+  created_at: Date;
+  updated_at: Date | null;
+  sprint: {
+    id: number;
+    name: string;
+    slug: string | null;
+    status: string;
+  } | null;
+  created_by_user: {
+    profiles: {
+      user_id: string;
+      username: string;
+      avatar_url: string | null;
+    } | null;
+  } | null;
+  updated_by_user: {
+    profiles: {
+      user_id: string;
+      username: string;
+      avatar_url: string | null;
+    } | null;
+  } | null;
+  assigned_to_user: {
+    profiles: {
+      user_id: string;
+      username: string;
+      avatar_url: string | null;
+    } | null;
+  } | null;
+  labels: {
+    id: number;
+    name: string;
+    color: string | null;
+    description: string | null;
+  }[];
+};
+
+/**
+ * Type helper pour extraire le type de retour d'une requête Prisma
+ * avec TicketListSelect
+ */
+export type PrismaTicketList = {
+  id: number;
+  ticket_number: string;
+  title: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  category: TicketCategory;
+  description: string | null;
+  story_points: number | null;
+  estimated_hours: number | null;
+  actual_hours: number | null;
+  due_date: Date | null;
+  completed_at: Date | null;
+  created_at: Date;
+  updated_at: Date | null;
+  sprint: {
+    id: number;
+    name: string;
+    slug: string | null;
+    status: string;
+  } | null;
+  created_by_user: {
+    profiles: {
+      user_id: string;
+      username: string;
+      avatar_url: string | null;
+    } | null;
+  } | null;
+  assigned_to_user: {
+    profiles: {
+      user_id: string;
+      username: string;
+      avatar_url: string | null;
+    } | null;
+  } | null;
+};

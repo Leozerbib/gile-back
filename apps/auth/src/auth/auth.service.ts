@@ -1,9 +1,13 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import { LoggerClientService } from "@shared/logger";
 import { SupabaseClientProvider } from "./supabase.provider";
 import { RpcException } from "@nestjs/microservices";
 import { status } from "@grpc/grpc-js";
+import { ProfileService } from "../profile/profile.service";
+import { AuthRefreshRequestDto, AuthRegisterRequestDto, AuthSignInRequestDto, AuthVerifyOtpRequestDto } from "@shared/types";
 
 function parseTTL(ttl?: string): string {
   return ttl && ttl.trim().length > 0 ? ttl : "15m";
@@ -26,12 +30,12 @@ export class AuthService {
     private readonly supabaseProvider: SupabaseClientProvider,
   ) {}
 
-  async signIn(email: string, password: string) {
+  async signIn(body: AuthSignInRequestDto) {
     const supabase = this.supabaseProvider.getClient();
-    await this.logger.log({ level: "info", service: "auth", func: "signIn", message: "Sign-in attempt", data: { email } });
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    await this.logger.log({ level: "info", service: "auth", func: "signIn", message: "Sign-in attempt", data: { email: body.email } });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: body.email, password: body.password });
     if (error || !data?.user) {
-      await this.logger.log({ level: "warn", service: "auth", func: "signIn", message: "Invalid credentials", data: { email } });
+      await this.logger.log({ level: "warn", service: "auth", func: "signIn", message: "Invalid credentials", data: { email: body.email } });
       // Return UNAUTHENTICATED to caller
       throw new RpcException({ code: status.UNAUTHENTICATED, message: "WRONG_CREDENTIALS" });
     }
@@ -51,28 +55,83 @@ export class AuthService {
     };
   }
 
-  async signUp(email: string, password: string) {
+  async signUp(body: AuthRegisterRequestDto): Promise<boolean> {
     const supabase = this.supabaseProvider.getClient();
-    await this.logger.log({ level: "info", service: "auth", func: "signUp", message: "Sign-up attempt", data: { email } });
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    await this.logger.log({ level: "info", service: "auth", func: "signUp", message: "Sign-up attempt", data: { email: body.email } });
+    const { data, error } = await supabase.auth.signUp({ email: body.email, password: body.password });
+
     if (error || !data?.user) {
-      await this.logger.log({ level: "warn", service: "auth", func: "signUp", message: "Sign-up failed", data: { email, error: String(error?.message ?? error) } });
       throw new RpcException({ code: status.INVALID_ARGUMENT, message: "SIGN_UP_FAILED" });
     }
-    const user = data.user;
-    const payload = { sub: user.id, email: user.email, typ: "access" };
-    const access_token = await this.jwt.signAsync(payload, { secret: this.accessSecret, expiresIn: this.accessTtl, algorithm: "HS256" });
-    const refresh_token = await this.jwt.signAsync({ sub: user.id, typ: "refresh" }, { secret: this.refreshSecret, expiresIn: this.refreshTtl, algorithm: "HS256" });
-    const expires_in = this.expiresInSeconds(this.accessTtl);
 
-    await this.logger.log({ level: "info", service: "auth", func: "signUp", message: "Sign-up success", data: { userId: user.id } });
+    await this.logger.log({ level: "info", service: "auth", func: "signUp", message: "Sign-up success", data: { userId: data.user.id } });
 
-    return { access_token, refresh_token, expires_in, token_type: "Bearer" };
+    return true;
   }
 
-  async refresh(refreshToken: string) {
+  async verifyOtp(body: AuthVerifyOtpRequestDto) {
+    const supabase = this.supabaseProvider.getClient();
+
     try {
-      const decoded = await this.jwt.verifyAsync(refreshToken, { secret: this.refreshSecret });
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: body.email,
+        token: body.otp,
+        type: "email",
+      });
+
+      if (error || !data?.user) {
+        await this.logger.log({
+          level: "warn",
+          service: "auth",
+          func: "verifyOtp",
+          message: "OTP verification failed",
+          data: { email: body.email, error: String(error?.message ?? error) },
+        });
+        throw new RpcException({ code: status.INVALID_ARGUMENT, message: "INVALID_OTP" });
+      }
+
+      const user = data.user;
+      const payload = { sub: user.id, email: user.email, typ: "access" };
+      const access_token = await this.jwt.signAsync(payload, {
+        secret: this.accessSecret,
+        expiresIn: this.accessTtl,
+        algorithm: "HS256",
+      });
+      const refresh_token = await this.jwt.signAsync({ sub: user.id, typ: "refresh" }, { secret: this.refreshSecret, expiresIn: this.refreshTtl, algorithm: "HS256" });
+      const expires_in = this.expiresInSeconds(this.accessTtl);
+
+      await this.logger.log({ 
+        level: "info",
+        service: "auth",
+        func: "verifyOtp",
+        message: "OTP verification success",
+        data: { userId: user.id },
+      });
+
+      return {
+        access_token,
+        refresh_token,
+        expires_in,
+        token_type: "Bearer",
+      };
+    } catch (err) {
+      if (err instanceof RpcException) {
+        throw err;
+      }
+      await this.logger.log({
+        level: "error",
+        service: "auth",
+        func: "verifyOtp",
+        message: "OTP verification error",
+        data: { email: body.email, error: String(err?.message ?? err) },
+      });
+      throw new RpcException({ code: status.INTERNAL, message: "OTP_VERIFICATION_ERROR" });
+    }
+  }
+
+  async refresh(body: AuthRefreshRequestDto) {
+    try {
+      const decoded = await this.jwt.verifyAsync(body.refresh_token, { secret: this.refreshSecret });
       if (decoded?.typ !== "refresh") {
         throw new Error("INVALID_TOKEN_TYPE");
       }
@@ -92,7 +151,6 @@ export class AuthService {
   async getUser(userId: string) {
     try {
       const supabase = this.supabaseProvider.getClient();
-      // @ts-ignore: admin requires service role key
       const { data, error } = await (supabase.auth.admin as any).getUserById(userId);
       if (error || !data?.user) throw error || new Error("USER_NOT_FOUND");
       const u: any = data.user;

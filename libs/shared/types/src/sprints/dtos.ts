@@ -358,20 +358,20 @@ export class SprintOverview {
   name!: string;
 
   @ApiPropertyOptional({
-    description: "Slug URL-friendly du sprint",
-    example: "sprint-1-authentication-system",
-    type: "string",
-    minLength: 1,
-    maxLength: 255,
-    pattern: "^[a-z0-9-]+$",
+    description: "Numéro de version du sprint",
+    example: 1.0,
+    type: "number",
+    minimum: 0.1,
+    maximum: 99.9,
     required: false,
   })
   @Expose()
   @IsOptional()
-  @IsString({ message: "Le slug du sprint doit être une chaîne de caractères" })
-  @Length(1, 255, { message: "Le slug du sprint doit contenir entre 1 et 255 caractères" })
-  @Transform(({ value }): string | undefined => (typeof value === "string" ? value.toLowerCase().trim() : value))
-  slug?: string;
+  @IsNumber({}, { message: "La version doit être un nombre" })
+  @Min(0.1, { message: "La version doit être supérieure à 0.1" })
+  @Max(99.9, { message: "La version ne peut pas dépasser 99.9" })
+  @Transform(({ value }): number | undefined => (typeof value === "string" ? parseFloat(value) : value))
+  version?: number;
 
   @ApiProperty({
     description: "Statut actuel du sprint",
@@ -497,22 +497,6 @@ export class SprintDto extends SprintOverview {
   capacity?: number;
 
   @ApiPropertyOptional({
-    description: "Numéro de version du sprint",
-    example: 1.0,
-    type: "number",
-    minimum: 0.1,
-    maximum: 99.9,
-    required: false,
-  })
-  @Expose()
-  @IsOptional()
-  @IsNumber({}, { message: "La version doit être un nombre" })
-  @Min(0.1, { message: "La version doit être supérieure à 0.1" })
-  @Max(99.9, { message: "La version ne peut pas dépasser 99.9" })
-  @Transform(({ value }): number | undefined => (typeof value === "string" ? parseFloat(value) : value))
-  version?: number;
-
-  @ApiPropertyOptional({
     description: "Notes de révision du sprint",
     example: "Sprint completed successfully with all planned features implemented",
     type: "string",
@@ -620,3 +604,183 @@ export class SprintsListDto extends BasePaginationDto<SprintDto | SprintOverview
   @Expose()
   items!: (SprintDto | SprintOverview)[];
 }
+
+// ============================================================================
+// PRISMA SELECT TYPES
+// ============================================================================
+
+/**
+ * Type de sélection Prisma pour SprintOverview
+ * Utilisé pour les listes et aperçus de sprints
+ */
+export const SprintOverviewSelect = {
+  id: true,
+  name: true,
+  version: true,
+  status: true,
+} as const;
+
+/**
+ * Type de sélection Prisma pour SprintDto complet
+ * Inclut toutes les informations détaillées du sprint avec relations
+ */
+export const SprintDtoSelect = {
+  id: true,
+  name: true,
+  slug: true,
+  status: true,
+  description: true,
+  project_id: true,
+  start_date: true,
+  end_date: true,
+  actual_start_date: true,
+  actual_end_date: true,
+  velocity: true,
+  capacity: true,
+  version: true,
+  review_notes: true,
+  retrospective_notes: true,
+  created_by: true,
+  updated_by: true,
+  created_at: true,
+  updated_at: true,
+  created_by_user: {
+    select: {
+      profiles: {
+        select: {
+          user_id: true,
+          username: true,
+          avatar_url: true,
+        },
+      },
+    },
+  },
+  updated_by_user: {
+    select: {
+      profiles: {
+        select: {
+          user_id: true,
+          username: true,
+          avatar_url: true,
+        },
+      },
+    },
+  },
+} as const;
+
+/**
+ * Type de sélection Prisma pour les listes de sprints
+ * Optimisé pour les requêtes de pagination avec relations minimales
+ */
+export const SprintListSelect = {
+  id: true,
+  name: true,
+  slug: true,
+  status: true,
+  description: true,
+  project_id: true,
+  start_date: true,
+  end_date: true,
+  actual_start_date: true,
+  actual_end_date: true,
+  velocity: true,
+  capacity: true,
+  version: true,
+  created_at: true,
+  updated_at: true,
+  created_by_user: {
+    select: {
+      profiles: {
+        select: {
+          user_id: true,
+          username: true,
+          avatar_url: true,
+        },
+      },
+    },
+  },
+} as const;
+
+// ============================================================================
+// TYPE HELPERS
+// ============================================================================
+
+/**
+ * Type helper pour extraire le type de retour d'une requête Prisma
+ * avec SprintOverviewSelect
+ */
+export type PrismaSprintOverview = {
+  id: number;
+  name: string;
+  slug: string | null;
+  status: SprintStatus;
+};
+
+/**
+ * Type helper pour extraire le type de retour d'une requête Prisma
+ * avec SprintDtoSelect
+ */
+export type PrismaSprintDto = {
+  id: number;
+  name: string;
+  slug: string | null;
+  status: SprintStatus;
+  description: string | null;
+  project_id: number;
+  start_date: Date;
+  end_date: Date | null;
+  actual_start_date: Date | null;
+  actual_end_date: Date | null;
+  velocity: number | null;
+  capacity: number | null;
+  version: number | null;
+  review_notes: string | null;
+  retrospective_notes: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_at: Date;
+  updated_at: Date | null;
+  created_by_user: {
+    profiles: {
+      user_id: string;
+      username: string;
+      avatar_url: string | null;
+    } | null;
+  } | null;
+  updated_by_user: {
+    profiles: {
+      user_id: string;
+      username: string;
+      avatar_url: string | null;
+    } | null;
+  } | null;
+};
+
+/**
+ * Type helper pour extraire le type de retour d'une requête Prisma
+ * avec SprintListSelect
+ */
+export type PrismaSprintList = {
+  id: number;
+  name: string;
+  slug: string | null;
+  status: SprintStatus;
+  description: string | null;
+  project_id: number;
+  start_date: Date;
+  end_date: Date | null;
+  actual_start_date: Date | null;
+  actual_end_date: Date | null;
+  velocity: number | null;
+  capacity: number | null;
+  version: number | null;
+  created_at: Date;
+  updated_at: Date | null;
+  created_by_user: {
+    profiles: {
+      user_id: string;
+      username: string;
+      avatar_url: string | null;
+    } | null;
+  } | null;
+};

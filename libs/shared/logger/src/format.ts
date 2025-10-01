@@ -32,7 +32,6 @@ export function formatLogLine(params: { timestamp: string; level: Level; service
   const serviceSeg = `${COLORS.magenta}[${params.service}]${RESET}`; // purple
   const ts = `${COLORS.cyan}[${params.timestamp}]${RESET}`;
   const lvl = colorLevel(params.level, params.level.toUpperCase());
-  const methodSeg = `${COLORS.yellow}[${params.func}]${RESET}`; // yellow
   const messageSed = colorLevel(params.level, params.message);
   const base = `${serviceSeg} ${ts} ${lvl} ${params.func} | ${messageSed}`;
   if (params.data === undefined || params.data === null) return base;

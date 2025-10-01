@@ -210,16 +210,6 @@ export class ProfileOverview {
  */
 export class ProfileDto extends ProfileOverview {
   @ApiProperty({
-    description: "Identifiant unique du profil",
-    example: "1",
-    type: "string",
-    required: true,
-  })
-  @Expose()
-  @IsString({ message: "L'ID du profil doit être une chaîne de caractères" })
-  id!: string;
-
-  @ApiProperty({
     description: "Prénom de l'utilisateur",
     example: "John",
     type: "string",
@@ -302,7 +292,6 @@ export const ProfileOverviewSelect = {
  * Inclut toutes les informations détaillées du profil
  */
 export const ProfileDtoSelect = {
-  id: true,
   user_id: true,
   username: true,
   avatar_url: true,
@@ -317,7 +306,6 @@ export const ProfileDtoSelect = {
  * Optimisé pour les requêtes de pagination
  */
 export const ProfileListSelect = {
-  id: true,
   user_id: true,
   username: true,
   avatar_url: true,

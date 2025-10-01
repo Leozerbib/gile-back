@@ -130,6 +130,17 @@ export class CreateProjectDto {
   settings?: Record<string, any>;
 
   @ApiPropertyOptional({
+    description: "ID de l'équipe",
+    example: "team-uuid-123",
+    format: "uuid",
+    type: "string",
+  })
+  @Expose()
+  @IsOptional()
+  @IsUUID("4", { message: "L'ID de l'équipe doit être un UUID valide" })
+  team_id?: string;
+
+  @ApiPropertyOptional({
     description: "Champs personnalisés",
     type: "object",
     example: { budget: 50000, client: "ABC Corp" },
@@ -352,6 +363,16 @@ export class ProjectOverview {
   @Min(0, { message: "La progression ne peut pas être négative" })
   @Max(100, { message: "La progression ne peut pas dépasser 100" })
   progress!: number;
+
+  @ApiProperty({
+    description: "Date de création du projet (ISO 8601)",
+    example: "2024-01-15T10:00:00Z",
+    format: "date-time",
+    type: "string",
+  })
+  @Expose()
+  @IsDateString({}, { message: "La date de création doit être une date valide ISO 8601" })
+  created_at!: string;
 }
 
 /**
@@ -382,16 +403,6 @@ export class ProjectDto extends ProjectOverview {
   @IsString({ message: "La description doit être une chaîne de caractères" })
   @Transform(({ value }): string | undefined => (typeof value === "string" ? value.trim() : value))
   description?: string;
-
-  @ApiProperty({
-    description: "Date de création du projet (ISO 8601)",
-    example: "2024-01-15T10:00:00Z",
-    format: "date-time",
-    type: "string",
-  })
-  @Expose()
-  @IsDateString({}, { message: "La date de création doit être une date valide ISO 8601" })
-  created_at!: string;
 
   @ApiPropertyOptional({
     description: "Description complète du projet",
@@ -567,6 +578,7 @@ export const ProjectOverviewSelect = {
   status: true,
   priority: true,
   progress: true,
+  created_at: true,
 } as const;
 
 /**

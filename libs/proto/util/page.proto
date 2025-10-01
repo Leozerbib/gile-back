@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package util;
+
+// Pagination metadata transferred alongside list results
+message PaginationMeta {
+  // Total number of items available
+  int32 total = 1;
+  // Number of items skipped (offset)
+  int32 skip = 2;
+  // Number of items requested (limit)
+  int32 take = 3;
+  // Whether there is a next page
+  optional bool has_next = 4;
+  // Whether there is a previous page
+  optional bool has_prev = 5;
+}
+
+// Pagination options for queries (offset/limit)
+message PaginationQuery {
+  // Number of items to skip (offset)
+  optional int32 skip = 1;
+  // Number of items to take (limit)
+  optional int32 take = 2;
+}

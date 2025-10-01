@@ -3,6 +3,8 @@ syntax = "proto3";
 package workspace.v1;
 
 import "profile/v1/profile.proto";
+import "util/page.proto";
+import "util/search.proto";
 
 option go_package = "github.com/bibz-project/gile-back/libs/proto/workspace/v1";
 
@@ -28,33 +30,11 @@ enum WorkspaceRole {
   GUEST = 8;
 }
 
-enum SortOrder {
-  ASC = 0;
-  DESC = 1;
-}
 
 // ============================================================================
 // COMMON SEARCH TYPES
 // ============================================================================
-
-message SortOption {
-  string field = 1;
-  SortOrder order = 2;
-}
-
-message GroupByOption {
-  string field = 1;
-  optional string subField = 2;
-}
-
-message BaseSearchQuery {
-  optional string search = 1;
-  optional int32 skip = 2;
-  optional int32 take = 3;
-  repeated SortOption sortBy = 4;
-  optional GroupByOption groupBy = 5;
-  optional GroupByOption subGroupBy = 6;
-}
+// Using util.SearchQuery, util.SortOption, util.GroupByOption, util.SortOrder from util/search.proto
 
 // ============================================================================
 // REQUEST/RESPONSE MESSAGES
@@ -70,14 +50,16 @@ message CreateWorkspaceResponse {
 }
 
 message SearchWorkspacesRequest {
-  optional BaseSearchQuery params = 1;
+  util.SearchQuery params = 1;
 }
 
 message SearchWorkspacesResponse {
-  repeated WorkspaceDto workspaces = 1;
-  int32 total = 2;
-  int32 skip = 3;
-  int32 take = 4;
+  repeated WorkspaceDto items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
 }
 
 message GetWorkspaceByIdRequest {
@@ -90,15 +72,17 @@ message GetWorkspaceByIdResponse {
 }
 
 message GetOverviewRequest {
-  optional BaseSearchQuery params = 1;
-  optional string userId = 2;
+  util.SearchQuery params = 1;
+  string userId = 2;
 }
 
 message GetOverviewResponse {
-  repeated WorkspaceOverview workspaces = 1;
-  int32 total = 2;
-  int32 skip = 3;
-  int32 take = 4;
+  repeated WorkspaceOverview items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
 }
 
 message UpdateWorkspaceRequest {
@@ -144,7 +128,7 @@ message UpdateWorkspaceDto {
 message WorkspaceOverview {
   string id = 1;
   string name = 2;
-  optional string logo_url = 3;
+  string logo_url = 3;
   WorkspaceVisibility visibility = 4;
   bool is_active = 5;
 }
@@ -153,14 +137,14 @@ message WorkspaceDto {
   string id = 1;
   string name = 2;
   optional string slug = 3;
-  optional string description = 4;
-  optional string logo_url = 5;
+  string description = 4;
+  string logo_url = 5;
   WorkspaceVisibility visibility = 6;
   bool is_active = 7;
   string created_at = 8;
-  optional string updated_at = 9;
-  optional profile.v1.ProfileOverview created_by_user = 10;
-  optional profile.v1.ProfileOverview updated_by_user = 11;
+  string updated_at = 9;
+  profile.v1.ProfileOverview created_by_user = 10;
+  profile.v1.ProfileOverview updated_by_user = 11;
   profile.v1.ProfileOverview owner = 12;
 }
 
@@ -169,10 +153,10 @@ message WorkspaceDto {
 // ============================================================================
 
 service WorkspaceService {
-  rpc Create(CreateWorkspaceRequest) returns (CreateWorkspaceResponse);
+  rpc Create(CreateWorkspaceRequest) returns (WorkspaceDto);
   rpc Search(SearchWorkspacesRequest) returns (SearchWorkspacesResponse);
-  rpc GetById(GetWorkspaceByIdRequest) returns (GetWorkspaceByIdResponse);
+  rpc GetById(GetWorkspaceByIdRequest) returns (WorkspaceDto);
   rpc GetOverview(GetOverviewRequest) returns (GetOverviewResponse);
-  rpc Update(UpdateWorkspaceRequest) returns (UpdateWorkspaceResponse);
+  rpc Update(UpdateWorkspaceRequest) returns (WorkspaceDto);
   rpc Delete(DeleteWorkspaceRequest) returns (DeleteWorkspaceResponse);
 }

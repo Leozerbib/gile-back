@@ -1,7 +1,7 @@
 import { Controller } from "@nestjs/common";
 import { GrpcMethod } from "@nestjs/microservices";
 import { LoggerClientService } from "@shared/logger";
-import { CreateSprintDto, UpdateSprintDto, SprintDto, AuthenticatedUser, BaseSearchQueryDto, SprintsListDto } from "@shared/types";
+import { CreateSprintDto, UpdateSprintDto, SprintDto, BaseSearchQueryDto, SprintsListDto } from "@shared/types";
 import { SprintsService } from "./sprints.service";
 
 @Controller()
@@ -11,8 +11,8 @@ export class SprintsController {
     private readonly logger: LoggerClientService,
   ) {}
 
-  @GrpcMethod("Sprints", "Create")
-  async create(data: { user: AuthenticatedUser; dto: CreateSprintDto }): Promise<SprintDto> {
+  @GrpcMethod("SprintsService", "Create")
+  async create(data: { ownerId: string; dto: CreateSprintDto }): Promise<SprintDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -21,7 +21,7 @@ export class SprintsController {
       data,
     });
 
-    const sprint = await this.sprintsService.create(data.user.userId, data.dto);
+    const sprint = await this.sprintsService.create(data.ownerId, data.dto);
 
     await this.logger.log({
       level: "info",
@@ -34,8 +34,8 @@ export class SprintsController {
     return sprint;
   }
 
-  @GrpcMethod("Sprints", "Search")
-  async search(data: { user: AuthenticatedUser; params?: BaseSearchQueryDto }): Promise<SprintsListDto> {
+  @GrpcMethod("SprintsService", "Search")
+  async search(data: { params?: BaseSearchQueryDto; userId?: string }): Promise<SprintsListDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -44,7 +44,7 @@ export class SprintsController {
       data,
     });
 
-    const list = await this.sprintsService.findAll(data.user.userId, data.params ?? {});
+    const list = await this.sprintsService.search(data.params ?? {});
 
     await this.logger.log({
       level: "info",
@@ -57,8 +57,8 @@ export class SprintsController {
     return list;
   }
 
-  @GrpcMethod("Sprints", "GetById")
-  async getById(data: { user: AuthenticatedUser; id: string }): Promise<SprintDto> {
+  @GrpcMethod("SprintsService", "GetById")
+  async getById(data: { id: string; userId?: string; includeMetrics?: boolean }): Promise<SprintDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -67,7 +67,7 @@ export class SprintsController {
       data,
     });
 
-    const sprint = await this.sprintsService.findById(data.id, data.user.userId);
+    const sprint = await this.sprintsService.getById(data.id, data.userId ?? "");
 
     await this.logger.log({
       level: "info",
@@ -77,20 +77,20 @@ export class SprintsController {
       data: { sprintId: sprint?.id },
     });
 
-    return sprint as SprintDto;
+    return sprint;
   }
 
-  @GrpcMethod("Sprints", "GetOverview")
-  async getOverview(data: { user: AuthenticatedUser; project_id: number; params?: BaseSearchQueryDto }): Promise<SprintsListDto> {
+  @GrpcMethod("SprintsService", "GetOverview")
+  async getOverview(data: { projectId: number; params?: BaseSearchQueryDto; userId?: string }): Promise<SprintsListDto> {
     await this.logger.log({
       level: "info",
       service: "project",
       func: "sprints.grpc.getOverview",
-      message: `gRPC GetOverview sprints request for project ${data.project_id}`,
+      message: `gRPC GetOverview sprints request for project ${data.projectId}`,
       data,
     });
 
-    const list = await this.sprintsService.getOverview(data.project_id, data.params ?? {});
+    const list = await this.sprintsService.getOverview(data.projectId, data.params ?? {});
 
     await this.logger.log({
       level: "info",
@@ -103,8 +103,8 @@ export class SprintsController {
     return list;
   }
 
-  @GrpcMethod("Sprints", "FindActiveSprint")
-  async findActiveSprint(data: { user: AuthenticatedUser; workspace_id?: string; project_id?: number }): Promise<SprintDto> {
+  @GrpcMethod("SprintsService", "FindActiveSprint")
+  async findActiveSprint(data: { workspaceId?: string; projectId?: number; userId?: string }): Promise<SprintDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -113,7 +113,7 @@ export class SprintsController {
       data,
     });
 
-    const sprint = await this.sprintsService.findActiveSprints(data.workspace_id ?? "", data.project_id ?? 0);
+    const sprint = await this.sprintsService.findActiveSprints(data.workspaceId ?? "", data.projectId ?? 0);
 
     await this.logger.log({
       level: "info",
@@ -126,8 +126,8 @@ export class SprintsController {
     return sprint;
   }
 
-  @GrpcMethod("Sprints", "Update")
-  async update(data: { user: AuthenticatedUser; id: string; dto: UpdateSprintDto }): Promise<SprintDto> {
+  @GrpcMethod("SprintsService", "Update")
+  async update(data: { id: string; dto: UpdateSprintDto; updatedBy?: string }): Promise<SprintDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -136,7 +136,7 @@ export class SprintsController {
       data,
     });
 
-    const sprint = await this.sprintsService.update(data.id, data.dto, data.user.userId);
+    const sprint = await this.sprintsService.update(data.id, data.dto, data.updatedBy ?? "");
 
     await this.logger.log({
       level: "info",
@@ -149,8 +149,8 @@ export class SprintsController {
     return sprint;
   }
 
-  @GrpcMethod("Sprints", "Delete")
-  async delete(data: { user: AuthenticatedUser; id: string }): Promise<boolean> {
+  @GrpcMethod("SprintsService", "Delete")
+  async delete(data: { id: string; deletedBy?: string }): Promise<{ success: boolean }> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -159,7 +159,7 @@ export class SprintsController {
       data,
     });
 
-    const success = await this.sprintsService.remove(data.id, data.user.userId);
+    const success = await this.sprintsService.delete(data.id, data.deletedBy ?? "");
 
     await this.logger.log({
       level: "info",
@@ -169,6 +169,6 @@ export class SprintsController {
       data: { success },
     });
 
-    return success;
+    return { success };
   }
 }

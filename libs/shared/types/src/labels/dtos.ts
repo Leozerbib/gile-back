@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsOptional, IsString, Length, Matches, IsUUID } from "class-validator";
+import { BasePaginationDto } from "../common/page";
+import { Expose } from "class-transformer";
 
 export class CreateLabelDto {
   @ApiProperty({
@@ -70,27 +72,73 @@ export class UpdateLabelDto {
 }
 
 export class LabelDto {
+  @Expose()
   @ApiProperty({
     description: "ID du label",
     example: 123,
   })
   id!: number;
 
+  @Expose()
   @ApiProperty({
     description: "Nom du label",
     example: "High Priority",
   })
   name!: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Description du label",
     example: "Issues that need immediate attention",
   })
   description?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Couleur hexadécimale du label",
     example: "#FF6B6B",
   })
-  color?: string;
+  color: string;
 }
+
+export class LabelsListDto extends BasePaginationDto<LabelDto> {
+  @ApiProperty({
+    description: "Liste des labels",
+    type: [LabelDto],
+  })
+  items: LabelDto[];
+}
+
+// Prisma select types for type-safe queries
+export const LabelOverviewSelect = {
+  id: true,
+  name: true,
+  color: true,
+} as const;
+
+export const LabelDtoSelect = {
+  id: true,
+  name: true,
+  description: true,
+  color: true,
+} as const;
+
+export const LabelListSelect = {
+  ...LabelOverviewSelect,
+} as const;
+
+// Type helpers for Prisma query return types
+export type PrismaLabelOverview = {
+  id: number;
+  name: string;
+  color: string | null;
+};
+
+export type PrismaLabelDto = {
+  id: number;
+  name: string;
+  description: string | null;
+  color: string | null;
+};
+
+export type PrismaLabelList = PrismaLabelOverview[];

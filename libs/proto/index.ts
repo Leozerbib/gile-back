@@ -25,6 +25,9 @@ export const TICKETS_SERVICE_NAME = "Tickets";
 export const PROTO_WORKSPACE_PATH = "libs/proto/workspace/v1/workspace.proto";
 export const PROTO_WORKSPACE_PACKAGE = "workspace.v1";
 export const WORKSPACE_SERVICE_NAME = "WorkspaceService";
+// Workspace Members (new)
+export const PROTO_WORKSPACE_MEMBERS_PATH = "libs/proto/workspace/v1/workspace-members.proto";
+export const WORKSPACE_MEMBERS_SERVICE_NAME = "WorkspaceMembers";
 
 export const PROTO_LABELS_PATH = "libs/proto/labels/v1/labels.proto";
 export const PROTO_LABELS_PACKAGE = "labels.v1";

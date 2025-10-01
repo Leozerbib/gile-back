@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package util;
+
+import "google/protobuf/struct.proto"; // for flexible filters
+
+// Sort direction for query ordering
+enum SortOrder {
+  SORT_ORDER_UNSPECIFIED = 0;
+  ASC = 1;
+  DESC = 2;
+}
+
+// A single field sorting option
+message SortOption {
+  string field = 1;     // field name to sort by
+  SortOrder order = 2;  // direction
+}
+
+// Grouping option (with sub-field)
+message GroupByOption {
+  string field = 1;           // primary grouping field
+  string sub_field = 2; // sub-group field
+}
+
+// Generic search query parameters (extends pagination options)
+message SearchQuery {
+  // Free-text search term
+  string search = 1;
+
+  // Sorting options (order of entries matters)
+  repeated SortOption sort_by = 2;
+
+  // Grouping options
+  GroupByOption group_by = 3;
+  GroupByOption sub_group_by = 4;
+
+  // Arbitrary filter object (maps to Record<string, any>)
+  google.protobuf.Struct filters = 5;
+
+  // Pagination options (offset/limit)
+  int32 skip = 6;
+  int32 take = 7;
+}
