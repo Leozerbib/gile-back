@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package epics.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Catégorie d'un epic - classification fonctionnelle
+enum EpicCategory {
+  SECURITY = 0;
+  PERFORMANCE = 1;
+  OPTIMIZATION = 2;
+  FEATURE = 3;
+  INFRASTRUCTURE = 4;
+  DOCUMENTATION = 5;
+  TESTING = 6;
+  REFACTORING = 7;
+  RESEARCH = 8;
+  DESIGN = 9;
+}
+
+// Statut d'un epic - cycle de vie de l'epic
+enum EpicStatus {
+  TODO = 0;
+  IN_PROGRESS = 1;
+  BLOCKED = 2;
+  DONE = 3;
+  CANCELLED = 4;
+}
+
+// DTO pour la création d'un epic
+message CreateEpicDto {
+  string title = 1;
+  optional string slug = 2;
+  optional string description = 3;
+  int32 project_id = 4;
+  EpicCategory category = 5;
+  optional EpicStatus status = 6;
+  optional int32 priority = 7;
+  optional string start_date = 8;
+  optional string end_date = 9;
+  optional int32 progress = 10;
+}
+
+// DTO pour la mise à jour d'un epic
+message UpdateEpicDto {
+  optional string title = 1;
+  optional string slug = 2;
+  optional string description = 3;
+  optional EpicCategory category = 4;
+  optional EpicStatus status = 5;
+  optional int32 priority = 6;
+}
+
+// Vue d'ensemble d'un epic - informations essentielles
+message EpicOverview {
+  int32 id = 1;
+  string title = 2;
+  int32 progress = 3;
+  EpicStatus status = 4;
+  EpicCategory category = 5;
+}
+
+// Informations sur un utilisateur
+message ProfileOverview {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  optional string first_name = 4;
+  optional string last_name = 5;
+  optional string avatar_url = 6;
+}
+
+// DTO complet d'un epic
+message EpicDto {
+  int32 id = 1;
+  string title = 2;
+  optional string slug = 3;
+  optional string description = 4;
+  EpicCategory category = 5;
+  EpicStatus status = 6;
+  int32 priority = 7;
+  int32 progress = 8;
+  optional string start_date = 9;
+  optional string end_date = 10;
+  string created_at = 11;
+  optional string updated_at = 12;
+  optional string created_by = 13;
+  optional string updated_by = 14;
+  int32 project_id = 15;
+  optional ProfileOverview created_by_user = 16;
+  optional ProfileOverview updated_by_user = 17;
+}
+
+// Paramètres de tri
+message SortField {
+  string field = 1;
+  string order = 2; // ASC or DESC
+}
+
+// Paramètres de recherche et pagination
+message SearchEpicsDto {
+  optional string search = 1;
+  optional int32 skip = 2;
+  optional int32 take = 3;
+  repeated SortField sort_by = 4;
+}
+
+// Liste paginée d'epics
+message EpicListDto {
+  repeated EpicOverview items = 1;
+  int32 total = 2;
+  int32 skip = 3;
+  int32 take = 4;
+}
+
+// Requête pour créer un epic
+message CreateEpicRequest {
+  string user_id = 1;
+  CreateEpicDto epic = 2;
+}
+
+// Requête pour chercher des epics dans un projet
+message SearchEpicsRequest {
+  string user_id = 1;
+  int32 project_id = 2;
+  SearchEpicsDto params = 3;
+}
+
+// Requête pour obtenir un aperçu des epics
+message GetEpicsOverviewRequest {
+  string user_id = 1;
+  int32 project_id = 2;
+  SearchEpicsDto params = 3;
+}
+
+// Requête pour obtenir un epic par ID
+message GetEpicByIdRequest {
+  string user_id = 1;
+  int32 id = 2;
+}
+
+// Requête pour mettre à jour un epic
+message UpdateEpicRequest {
+  string user_id = 1;
+  int32 id = 2;
+  UpdateEpicDto epic = 3;
+}
+
+// Requête pour supprimer un epic
+message DeleteEpicRequest {
+  string user_id = 1;
+  int32 id = 2;
+}
+
+// Réponse vide pour la suppression
+message DeleteEpicResponse {}
+
+// Service de gestion des epics
+service EpicsService {
+  rpc Create(CreateEpicRequest) returns (EpicDto);
+  rpc Search(SearchEpicsRequest) returns (EpicListDto);
+  rpc GetOverview(GetEpicsOverviewRequest) returns (EpicListDto);
+  rpc GetById(GetEpicByIdRequest) returns (EpicDto);
+  rpc Update(UpdateEpicRequest) returns (EpicDto);
+  rpc Delete(DeleteEpicRequest) returns (DeleteEpicResponse);
+}

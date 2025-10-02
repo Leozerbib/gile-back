@@ -11,10 +11,15 @@ import { TeamsService } from "apps/workspace/src/team/teams.service";
 import { LoggerClientModule } from "@shared/logger";
 import { PrismaModule } from "@shared/prisma";
 import { TeamsGatewayModule } from "libs/shared/utils/src/client/team/teams-gateway.module";
+import { EpicsController } from "./epic/epics.controller";
+import { EpicsService } from "./epic/epics.service";
+import { TeamMembersService } from "apps/workspace/src/team/team-members.service";
+import { TasksController } from "./task/tasks.controller";
+import { TasksService } from "./task/tasks.service";
 
 @Module({
   imports: [LoggerClientModule, PrismaModule, TeamsGatewayModule],
-  controllers: [HealthController, TicketsController, SprintsController, ProjectsController],
-  providers: [TicketsService, SprintsService, ProjectsService, WorkspaceMembersService, TeamsService],
+  controllers: [HealthController, TicketsController, SprintsController, ProjectsController, EpicsController, TasksController],
+  providers: [TicketsService, SprintsService, ProjectsService, EpicsService, WorkspaceMembersService, TeamsService, TeamMembersService, TasksService],
 })
 export class AppModule {}

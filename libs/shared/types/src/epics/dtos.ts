@@ -134,43 +134,6 @@ export class CreateEpicDto {
   @IsOptional()
   @IsDateString({}, { message: "La date de début doit être une date valide ISO 8601" })
   start_date?: string;
-
-  @ApiPropertyOptional({
-    description: "Date de fin prévue (format ISO 8601)",
-    example: "2024-03-15",
-    format: "date",
-    type: "string",
-  })
-  @Expose()
-  @IsOptional()
-  @IsDateString({}, { message: "La date de fin doit être une date valide ISO 8601" })
-  end_date?: string;
-
-  @ApiPropertyOptional({
-    description: "Date de fin réelle (format ISO 8601)",
-    example: "2024-03-10",
-    format: "date",
-    type: "string",
-  })
-  @Expose()
-  @IsOptional()
-  @IsDateString({}, { message: "La date de fin réelle doit être une date valide ISO 8601" })
-  actual_end_date?: string;
-
-  @ApiPropertyOptional({
-    description: "Progression de l'epic (0-100)",
-    default: 0,
-    minimum: 0,
-    maximum: 100,
-    example: 35,
-    type: "integer",
-  })
-  @Expose()
-  @IsOptional()
-  @IsInt({ message: "La progression doit être un nombre entier" })
-  @Min(0, { message: "La progression ne peut pas être négative" })
-  @Max(100, { message: "La progression ne peut pas dépasser 100" })
-  progress?: number = 0;
 }
 
 /**
@@ -366,17 +329,6 @@ export class EpicDto extends EpicOverview {
   @IsDateString({}, { message: "La date de fin doit être une date valide ISO 8601" })
   end_date?: string;
 
-  @ApiPropertyOptional({
-    description: "Date de fin réelle (format ISO 8601)",
-    example: "2024-03-10",
-    format: "date",
-    type: "string",
-  })
-  @Expose()
-  @IsOptional()
-  @IsDateString({}, { message: "La date de fin réelle doit être une date valide ISO 8601" })
-  actual_end_date?: string;
-
   @ApiProperty({
     description: "Date de création de l'epic (ISO 8601)",
     example: "2024-01-15T10:00:00Z",
@@ -483,7 +435,6 @@ export const EpicDtoSelect = {
   progress: true,
   start_date: true,
   end_date: true,
-  actual_end_date: true,
   created_at: true,
   updated_at: true,
   created_by: true,
@@ -493,9 +444,6 @@ export const EpicDtoSelect = {
     select: {
       id: true,
       username: true,
-      email: true,
-      first_name: true,
-      last_name: true,
       avatar_url: true,
     },
   },
@@ -503,9 +451,6 @@ export const EpicDtoSelect = {
     select: {
       id: true,
       username: true,
-      email: true,
-      first_name: true,
-      last_name: true,
       avatar_url: true,
     },
   },

@@ -66,8 +66,9 @@ message CreateTicketDto {
   int32 project_id = 8;
   int32 sprint_id = 9;
   int32 parent_ticket_id = 10;
-  repeated int32 task_id = 11;
-  repeated int32 labels_id = 12;
+  repeated int32 task_ids = 11;
+  repeated int32 label_ids = 12;
+  repeated int32 dependency_ticket_ids = 13;
 }
 
 message UpdateTicketDto {
@@ -87,13 +88,14 @@ message UpdateTicketDto {
   string assigned_to = 14;
   string ticket_number = 15;
   int32 parent_ticket_id = 16;
-  repeated int32 task_id = 17;
-  repeated int32 labels_id = 18;
+  repeated int32 task_ids = 17;
+  repeated int32 label_ids = 18;
+  repeated int32 dependency_ticket_ids = 19;
 }
 
 message TicketDto {
   int32 id = 1;
-  repeated int32 task_id = 2;
+  repeated int32 task_ids = 2;
   optional int32 sprint_id = 3;
   int32 project_id = 4;
   optional string assigned_to = 5;
@@ -121,6 +123,7 @@ message TicketDto {
   optional profile.v1.ProfileOverview updated_by_user = 27;
   optional profile.v1.ProfileOverview assigned_to_user = 28;
   repeated labels.v1.LabelDto labels = 29;
+  repeated int32 dependency_ticket_ids = 30;
 }
 
 // ============================================================================

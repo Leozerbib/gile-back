@@ -20,6 +20,10 @@ import { WorkspaceGatewayController } from "./workspace-gateway/workspace.contro
 import { WorkspaceMemberGatewayController } from "./workspace-gateway/workspace-member-gateway.controller";
 import { ProjectsGatewayController } from "./project-gateway/projects-gateway.controller";
 import { LabelGatewayController } from "./label-gateway/label-gateway.controller";
+import { EpicsGatewayController } from "./epics-gateway/epics-gateway.controller";
+import { TasksGatewayController } from "./tasks-gateway/tasks-gateway.controller";
+import { EpicsGatewayModule } from "libs/shared/utils/src/client/epic/epic-gateway.module";
+import { TasksGatewayModule } from "libs/shared/utils/src/client/task/tasks-gateway.module";
 
 @Module({
   imports: [
@@ -32,6 +36,8 @@ import { LabelGatewayController } from "./label-gateway/label-gateway.controller
     SprintsGatewayModule,
     ProjectsGatewayModule,
     TeamsGatewayModule,
+    EpicsGatewayModule,
+    TasksGatewayModule,
   ],
   controllers: [
     AppController,
@@ -44,6 +50,8 @@ import { LabelGatewayController } from "./label-gateway/label-gateway.controller
     SprintsGatewayController,
     ProjectsGatewayController,
     LabelGatewayController,
+    EpicsGatewayController,
+    TasksGatewayController,
   ],
   providers: [AppService, GrpcToHttpExceptionFilter],
 })

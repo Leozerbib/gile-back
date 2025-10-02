@@ -105,23 +105,6 @@ export class TicketsService {
         }
       }
 
-      let parentTicket: number | null = null;
-      // Vérifier le ticket parent si fourni
-      if (dto.parent_ticket_id && dto.parent_ticket_id !== 0) {
-        const parent = await this.prisma.tickets.findUnique({
-          where: { id: dto.parent_ticket_id },
-          select: { id: true, project_id: true },
-        });
-
-        if (!parent) {
-          parentTicket = null;
-        } else if (parent?.project_id !== dto.project_id) {
-          throw new RpcException({ code: status.FAILED_PRECONDITION, message: "Parent ticket does not belong to the specified project" });
-        } else {
-          parentTicket = parent.id;
-        }
-      }
-
       const id = await this.prisma.$transaction(async tx => {
         const id = await tx.tickets.create({
           data: {
@@ -135,8 +118,6 @@ export class TicketsService {
             due_date: dto.due_date ? new Date(dto.due_date) : null,
             project_id: dto.project_id,
             sprint_id: dto.sprint_id,
-            parent_ticket_id: parentTicket,
-            task_id: dto.task_id || [],
             created_by: userId,
             assigned_to: userId,
           },
@@ -155,9 +136,50 @@ export class TicketsService {
           throw new RpcException({ code: status.INTERNAL, message: "Unable to create ticket" });
         }
 
-        if (dto.labels_id!.length > 0) {
-          // Vérifier l'existence des labels
-          for (const labelId of dto.labels_id!) {
+        // Handle task_tickets relation
+        if (dto.task_ids && dto.task_ids.length > 0) {
+          for (const taskId of dto.task_ids) {
+            const existingTask = await tx.tasks.findUnique({
+              where: { id: taskId },
+              select: { id: true },
+            });
+
+            if (existingTask) {
+              await tx.task_tickets.create({
+                data: {
+                  ticket_id: id.id,
+                  task_id: taskId,
+                },
+              });
+            }
+          }
+        }
+
+        // Handle ticket_dependencies relation (merge parent_ticket_id and dependency_ticket_ids)
+        const deps = new Set<number>();
+        if (dto.dependency_ticket_ids && dto.dependency_ticket_ids.length > 0) {
+          dto.dependency_ticket_ids.forEach(d => deps.add(d));
+        }
+        if (deps.size > 0) {
+          for (const depId of deps) {
+            const existingTicket = await tx.tickets.findUnique({
+              where: { id: depId },
+              select: { id: true },
+            });
+            if (existingTicket) {
+              await tx.ticket_dependencies.create({
+                data: {
+                  ticket_id: id.id,
+                  depends_on_ticket_id: depId,
+                },
+              });
+            }
+          }
+        }
+
+        // Handle labels
+        if (dto.label_ids && dto.label_ids.length > 0) {
+          for (const labelId of dto.label_ids) {
             const existingLabel = await tx.labels.findUnique({
               where: { id: labelId },
               select: { id: true },
@@ -300,6 +322,8 @@ export class TicketsService {
             created_by_user: { select: ProfileOverviewSelect },
             updated_by_user: { select: ProfileOverviewSelect },
             labels: { include: { label: { select: { id: true, name: true } } } },
+            task_tickets: { select: { task_id: true } },
+            ticket_dependencies_ticket_dependencies_ticket_idTotickets: { select: { depends_on_ticket_id: true } },
           },
         }),
         this.prisma.tickets.count({ where }),
@@ -311,6 +335,8 @@ export class TicketsService {
           estimated_hours: ticket.estimated_hours ? Number(ticket.estimated_hours) : null,
           actual_hours: ticket.actual_hours ? Number(ticket.actual_hours) : null,
           story_points: ticket.story_points ? Number(ticket.story_points) : null,
+          task_ids: ticket.task_tickets.map(tt => tt.task_id),
+          dependency_ticket_ids: ticket.ticket_dependencies_ticket_dependencies_ticket_idTotickets.map(td => td.depends_on_ticket_id),
         };
         return plainToInstance(TicketDto, transformedTicket);
       });
@@ -375,6 +401,8 @@ export class TicketsService {
           assigned_to_user: { select: ProfileOverviewSelect },
           created_by_user: { select: ProfileOverviewSelect },
           updated_by_user: { select: ProfileOverviewSelect },
+          task_tickets: { select: { task_id: true } },
+          ticket_dependencies_ticket_dependencies_ticket_idTotickets: { select: { depends_on_ticket_id: true } },
         },
       });
 
@@ -388,7 +416,12 @@ export class TicketsService {
       //   throw new RpcException({ code: status.PERMISSION_DENIED, message: "You don't have permission to view this ticket" });
       // }
 
-      const ticketDto: TicketDto = plainToInstance(TicketDto, ticket);
+      const transformedTicket = {
+        ...ticket,
+        task_ids: ticket.task_tickets.map(tt => tt.task_id),
+        dependency_ticket_ids: ticket.ticket_dependencies_ticket_dependencies_ticket_idTotickets.map(td => td.depends_on_ticket_id),
+      };
+      const ticketDto: TicketDto = plainToInstance(TicketDto, transformedTicket);
 
       const labels = await this.prisma.ticket_labels
         .findMany({
@@ -483,17 +516,15 @@ export class TicketsService {
         }
       }
 
-      if (dto.parent_ticket_id && dto.parent_ticket_id !== existingTicket.parent_ticket_id) {
-        const parentTicket = await this.prisma.tickets.findUnique({
+      if (dto.parent_ticket_id) {
+        const parent = await this.prisma.tickets.findUnique({
           where: { id: dto.parent_ticket_id },
           select: { id: true, project_id: true },
         });
-
-        if (!parentTicket) {
+        if (!parent) {
           throw new RpcException({ code: status.NOT_FOUND, message: `Parent ticket with ID "${dto.parent_ticket_id}" not found` });
         }
-
-        if (parentTicket.project_id !== existingTicket.project_id) {
+        if (parent.project_id !== existingTicket.project_id) {
           throw new RpcException({ code: status.INTERNAL, message: "Parent ticket does not belong to the same project" });
         }
       }
@@ -519,10 +550,46 @@ export class TicketsService {
       if (dto.sprint_id !== undefined) updateData.sprint = { connect: { id: dto.sprint_id } };
       if (dto.assigned_to !== undefined) updateData.assigned_to_user = { connect: { user_id: dto.assigned_to } };
       if (dto.ticket_number !== undefined) updateData.ticket_number = dto.ticket_number;
-      if (dto.parent_ticket_id !== undefined) {
-        updateData.ticket = dto.parent_ticket_id ? { connect: { id: dto.parent_ticket_id } } : { disconnect: true };
+
+      // Handle task_tickets updates
+      if (dto.task_ids !== undefined) {
+        await this.prisma.task_tickets.deleteMany({ where: { ticket_id: ticketId } });
+        if (dto.task_ids.length > 0) {
+          await this.prisma.task_tickets.createMany({
+            data: dto.task_ids.map(taskId => ({ ticket_id: ticketId, task_id: taskId })),
+            skipDuplicates: true,
+          });
+        }
       }
-      if (dto.task_id !== undefined) updateData.task_id = dto.task_id;
+
+      // Handle ticket_dependencies updates (consider parent_ticket_id fallback)
+      if (dto.dependency_ticket_ids !== undefined || dto.parent_ticket_id !== undefined) {
+        await this.prisma.ticket_dependencies.deleteMany({ where: { ticket_id: ticketId } });
+        const deps = new Set<number>();
+        if (Array.isArray(dto.dependency_ticket_ids)) {
+          dto.dependency_ticket_ids.forEach(d => deps.add(d));
+        }
+        if (typeof dto.parent_ticket_id === "number" && dto.parent_ticket_id > 0) {
+          deps.add(dto.parent_ticket_id);
+        }
+        if (deps.size > 0) {
+          await this.prisma.ticket_dependencies.createMany({
+            data: Array.from(deps).map(depId => ({ ticket_id: ticketId, depends_on_ticket_id: depId })),
+            skipDuplicates: true,
+          });
+        }
+      }
+
+      // Handle label updates
+      if (dto.label_ids !== undefined) {
+        await this.prisma.ticket_labels.deleteMany({ where: { ticket_id: ticketId } });
+        if (dto.label_ids.length > 0) {
+          await this.prisma.ticket_labels.createMany({
+            data: dto.label_ids.map(labelId => ({ ticket_id: ticketId, label_id: labelId, created_by: userId })),
+            skipDuplicates: true,
+          });
+        }
+      }
 
       const updatedTicket = await this.prisma.tickets.update({
         where: { id: ticketId },
@@ -531,6 +598,8 @@ export class TicketsService {
           assigned_to_user: { select: ProfileOverviewSelect },
           created_by_user: { select: ProfileOverviewSelect },
           updated_by_user: { select: ProfileOverviewSelect },
+          task_tickets: { select: { task_id: true } },
+          ticket_dependencies_ticket_dependencies_ticket_idTotickets: { select: { depends_on_ticket_id: true } },
         },
       });
 
@@ -547,6 +616,8 @@ export class TicketsService {
         estimated_hours: updatedTicket.estimated_hours ? Number(updatedTicket.estimated_hours) : null,
         actual_hours: updatedTicket.actual_hours ? Number(updatedTicket.actual_hours) : null,
         story_points: updatedTicket.story_points ? Number(updatedTicket.story_points) : null,
+        task_ids: updatedTicket.task_tickets.map(tt => tt.task_id),
+        dependency_ticket_ids: updatedTicket.ticket_dependencies_ticket_dependencies_ticket_idTotickets.map(td => td.depends_on_ticket_id),
       };
 
       return plainToInstance(TicketDto, transformedTicket);

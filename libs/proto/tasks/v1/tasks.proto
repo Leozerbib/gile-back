@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package tasks.v1;
+
+import "google/protobuf/struct.proto";
+import "profile/v1/profile.proto";
+import "util/page.proto";
+import "util/search.proto";
+import "epics/v1/epics.proto";
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TODO = 1;
+  IN_PROGRESS = 2;
+  BLOCKED = 3;
+  DONE = 4;
+  CANCELLED = 5;
+}
+
+// ============================================================================
+// MESSAGES - DTOs
+// ============================================================================
+
+message CreateTaskDto {
+  string title = 1;
+  optional string description = 2;
+  int32 epic_id = 3;
+  optional TaskStatus status = 4;
+  optional int32 priority = 5;
+  optional double estimated_hours = 6;
+  optional double actual_hours = 7;
+  optional string due_date = 8;  // ISO 8601 date
+}
+
+message UpdateTaskDto {
+  optional string title = 1;
+  optional string description = 2;
+  optional int32 epic_id = 3;
+  optional TaskStatus status = 4;
+  optional int32 priority = 5;
+  optional double estimated_hours = 6;
+  optional double actual_hours = 7;
+  optional string due_date = 8;       // ISO 8601 date
+  optional string completed_at = 9;   // ISO 8601 datetime
+}
+
+// ============================================================================
+// MESSAGES - Response Objects
+// ============================================================================
+
+message TaskOverview {
+  int32 id = 1;
+  string title = 2;
+  TaskStatus status = 3;
+  int32 priority = 4;
+}
+
+message Task {
+  int32 id = 1;
+  string title = 2;
+  optional string description = 3;
+  int32 epic_id = 4;
+  TaskStatus status = 5;
+  int32 priority = 6;
+  optional double estimated_hours = 7;
+  optional double actual_hours = 8;
+  optional string due_date = 9;           // ISO 8601 date
+  optional string completed_at = 10;      // ISO 8601 datetime
+  string created_at = 11;                 // ISO 8601 datetime
+  optional string updated_at = 12;        // ISO 8601 datetime
+  optional string created_by = 13;        // UUID
+  optional string updated_by = 14;        // UUID
+  optional profile.v1.ProfileOverview created_by_user = 15;
+  optional profile.v1.ProfileOverview updated_by_user = 16;
+  optional epics.v1.EpicOverview epic = 17;
+}
+
+message TaskList {
+  repeated Task items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
+}
+
+message TaskOverviewList {
+  repeated TaskOverview items = 1;
+  int32 total = 2 [deprecated = true];
+  int32 skip = 3 [deprecated = true];
+  int32 take = 4 [deprecated = true];
+  bool has_next = 5;
+  bool has_prev = 6;
+}
+
+// ============================================================================
+// REQUESTS
+// ============================================================================
+
+message CreateRequest {
+  int32 project_id = 1;
+  string user_id = 2;
+  int32 epic_id = 3;
+  CreateTaskDto dto = 4;
+}
+
+message SearchRequest {
+  int32 project_id = 1;
+  string user_id = 2;
+  int32 epic_id = 3;
+  optional util.SearchQuery params = 4;
+}
+
+message GetByIdRequest {
+  int32 project_id = 1;
+  string user_id = 2;
+  int32 id = 3;
+}
+
+message GetOverviewRequest {
+  int32 project_id = 1;
+  string user_id = 2;
+  int32 epic_id = 3;
+  optional util.SearchQuery params = 4;
+}
+
+message UpdateRequest {
+  int32 project_id = 1;
+  string user_id = 2;
+  int32 id = 3;
+  UpdateTaskDto dto = 4;
+}
+
+message DeleteRequest {
+  int32 project_id = 1;
+  string user_id = 2;
+  int32 id = 3;
+}
+
+message DeleteResponse {
+  bool success = 1;
+}
+
+// ============================================================================
+// SERVICE
+// ============================================================================
+
+service Tasks {
+  rpc Create (CreateRequest) returns (Task);
+  rpc Search (SearchRequest) returns (TaskList);
+  rpc GetById (GetByIdRequest) returns (Task);
+  rpc GetOverview (GetOverviewRequest) returns (TaskOverviewList);
+  rpc Update (UpdateRequest) returns (Task);
+  rpc Delete (DeleteRequest) returns (DeleteResponse);
+}

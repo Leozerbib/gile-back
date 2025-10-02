@@ -2,7 +2,16 @@ import { Body, Controller, Get, Headers, HttpCode, HttpException, HttpStatus, Po
 import { ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiOkResponse, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { AuthGatewayService } from "./auth.client";
 import { ProfileGatewayService } from "../profile-gateway/profile.client";
-import { AuthRegisterRequestDto, AuthSignInRequestDto, AuthRefreshRequestDto, AuthTokensDto, AuthVerifyResponseDto, AuthLoginResponseDto, ProfileDto, AuthVerifyOtpRequestDto } from "@shared/types";
+import {
+  AuthRegisterRequestDto,
+  AuthSignInRequestDto,
+  AuthRefreshRequestDto,
+  AuthTokensDto,
+  AuthVerifyResponseDto,
+  AuthLoginResponseDto,
+  ProfileDto,
+  AuthVerifyOtpRequestDto,
+} from "@shared/types";
 import { normalizeObject } from "@shared/utils";
 
 @ApiTags("Auth")

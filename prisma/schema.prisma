@@ -475,23 +475,24 @@ model stacks {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model tasks {
-  id              Int        @id @default(autoincrement())
-  created_at      DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime?  @db.Timestamptz(6)
-  created_by      String?    @db.Uuid
-  updated_by      String?    @db.Uuid
+  id              Int            @id @default(autoincrement())
+  created_at      DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?      @db.Timestamptz(6)
+  created_by      String?        @db.Uuid
+  updated_by      String?        @db.Uuid
   epic_id         Int
-  title           String     @db.VarChar(255)
+  title           String         @db.VarChar(255)
   description     String?
-  status          TaskStatus @default(TODO)
-  priority        Int        @default(0) @db.SmallInt
-  estimated_hours Decimal?   @db.Decimal(5, 2)
-  actual_hours    Decimal?   @default(0) @db.Decimal(5, 2)
-  due_date        DateTime?  @db.Date
-  completed_at    DateTime?  @db.Timestamptz(6)
-  created_by_user profiles?  @relation("tasks_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
-  updated_by_user profiles?  @relation("tasks_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
-  epic            epics      @relation(fields: [epic_id], references: [id], onDelete: Cascade, map: "fk_tasks_epic")
+  status          TaskStatus     @default(TODO)
+  priority        Int            @default(0) @db.SmallInt
+  estimated_hours Float?         @db.Real
+  actual_hours    Float?         @default(0) @db.Real
+  due_date        DateTime?      @db.Date
+  completed_at    DateTime?      @db.Timestamptz(6)
+  task_tickets    task_tickets[]
+  created_by_user profiles?      @relation("tasks_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user profiles?      @relation("tasks_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  epic            epics          @relation(fields: [epic_id], references: [id], onDelete: Cascade, map: "fk_tasks_epic")
 
   @@index([due_date], map: "idx_tasks_due_date")
   @@index([epic_id], map: "idx_tasks_epic")
@@ -587,53 +588,50 @@ model ticket_labels {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model tickets {
-  id                   Int               @id @default(autoincrement())
-  created_at           DateTime          @default(now()) @db.Timestamptz(6)
-  updated_at           DateTime?         @db.Timestamptz(6)
-  created_by           String?           @db.Uuid
-  updated_by           String?           @db.Uuid
-  task_id              Int[]
-  sprint_id            Int?
-  project_id           Int?
-  assigned_to          String?           @db.Uuid
-  parent_ticket_id     Int?
-  ticket_number        String?           @unique(map: "uk_tickets_number") @db.VarChar(50)
-  title                String            @db.VarChar(255)
-  description          String?
-  status               TicketStatus      @default(TODO)
-  priority             TicketPriority    @default(MEDIUM)
-  category             TicketCategory    @default(TASK)
-  story_points         Int?              @db.SmallInt
-  estimated_hours      Float?            @default(1) @db.Real
-  actual_hours         Float?            @default(1) @db.Real
-  due_date             DateTime?         @db.Date
-  completed_at         DateTime?         @db.Timestamptz(6)
-  implementation_notes String?
-  testing_notes        String?
-  activityLogs         activity_logs[]
-  comments             ticket_comments[]
-  labels               ticket_labels[]
-  created_by_user      profiles?         @relation("tickets_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
-  updated_by_user      profiles?         @relation("tickets_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
-  assigned_to_user     profiles?         @relation("tickets_assigned_to_to_profiles", fields: [assigned_to], references: [user_id], map: "fk_tickets_assigned_to")
-  ticket               tickets?          @relation("ticketsTotickets", fields: [parent_ticket_id], references: [id], onDelete: Cascade, map: "fk_tickets_parent")
-  other_tickets        tickets[]         @relation("ticketsTotickets")
-  project              projects?         @relation(fields: [project_id], references: [id], onDelete: Cascade, map: "fk_tickets_project")
-  sprint               sprints?          @relation(fields: [sprint_id], references: [id], map: "fk_tickets_sprint")
+  id                                                                    Int                   @id @default(autoincrement())
+  created_at                                                            DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                                            DateTime?             @db.Timestamptz(6)
+  created_by                                                            String?               @db.Uuid
+  updated_by                                                            String?               @db.Uuid
+  sprint_id                                                             Int?
+  project_id                                                            Int?
+  assigned_to                                                           String?               @db.Uuid
+  ticket_number                                                         String?               @unique(map: "uk_tickets_number") @db.VarChar(50)
+  title                                                                 String                @db.VarChar(255)
+  description                                                           String?
+  status                                                                TicketStatus          @default(TODO)
+  priority                                                              TicketPriority        @default(MEDIUM)
+  category                                                              TicketCategory        @default(TASK)
+  story_points                                                          Int?                  @db.SmallInt
+  estimated_hours                                                       Float?                @default(1) @db.Real
+  actual_hours                                                          Float?                @default(1) @db.Real
+  due_date                                                              DateTime?             @db.Date
+  completed_at                                                          DateTime?             @db.Timestamptz(6)
+  implementation_notes                                                  String?
+  testing_notes                                                         String?
+  activityLogs                                                          activity_logs[]
+  task_tickets                                                          task_tickets[]
+  comments                                                              ticket_comments[]
+  ticket_dependencies_ticket_dependencies_depends_on_ticket_idTotickets ticket_dependencies[] @relation("ticket_dependencies_depends_on_ticket_idTotickets")
+  ticket_dependencies_ticket_dependencies_ticket_idTotickets            ticket_dependencies[] @relation("ticket_dependencies_ticket_idTotickets")
+  labels                                                                ticket_labels[]
+  created_by_user                                                       profiles?             @relation("tickets_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  updated_by_user                                                       profiles?             @relation("tickets_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  assigned_to_user                                                      profiles?             @relation("tickets_assigned_to_to_profiles", fields: [assigned_to], references: [user_id], map: "fk_tickets_assigned_to")
+  project                                                               projects?             @relation(fields: [project_id], references: [id], onDelete: Cascade, map: "fk_tickets_project")
+  sprint                                                                sprints?              @relation(fields: [sprint_id], references: [id], map: "fk_tickets_sprint")
 
   @@index([assigned_to], map: "idx_tickets_assigned")
   @@index([category], map: "idx_tickets_category")
   @@index([created_at(sort: Desc)], map: "idx_tickets_created_at")
   @@index([due_date], map: "idx_tickets_due_date")
   @@index([ticket_number], map: "idx_tickets_number")
-  @@index([parent_ticket_id], map: "idx_tickets_parent")
   @@index([priority], map: "idx_tickets_priority")
   @@index([project_id], map: "idx_tickets_project")
   @@index([sprint_id], map: "idx_tickets_sprint")
   @@index([sprint_id, status], map: "idx_tickets_sprint_status")
   @@index([status], map: "idx_tickets_status")
   @@index([status, priority], map: "idx_tickets_status_priority")
-  @@index([task_id], map: "idx_tickets_task")
   @@index([title(ops: raw("gin_trgm_ops"))], map: "idx_tickets_title_trgm", type: Gin)
   @@schema("bibz-agile")
 }
@@ -686,7 +684,6 @@ model user_preferences {
   show_completed_tasks Boolean   @default(true)
   default_view         String    @default("kanban") @db.VarChar(50)
   items_per_page       Int       @default(25)
-  default_workspace    String    @db.Uuid
   profile              profiles  @relation(fields: [user_id], references: [user_id], onDelete: Cascade, map: "fk_user_preferences_user")
 
   @@index([user_id], map: "idx_user_preferences_user")
@@ -810,6 +807,31 @@ model workspaces {
   @@index([owner_id], map: "idx_workspaces_owner")
   @@index([slug], map: "idx_workspaces_slug")
   @@index([visibility], map: "idx_workspaces_visibility")
+  @@schema("bibz-agile")
+}
+
+model task_tickets {
+  task_id    Int
+  ticket_id  Int
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  tasks      tasks    @relation(fields: [task_id], references: [id], onDelete: Cascade, map: "fk_task_tickets_task")
+  tickets    tickets  @relation(fields: [ticket_id], references: [id], onDelete: Cascade, map: "fk_task_tickets_ticket")
+
+  @@id([task_id, ticket_id])
+  @@index([ticket_id], map: "idx_task_tickets_ticket_id")
+  @@schema("bibz-agile")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model ticket_dependencies {
+  ticket_id                                                 Int
+  depends_on_ticket_id                                      Int
+  created_at                                                DateTime @default(now()) @db.Timestamptz(6)
+  tickets_ticket_dependencies_depends_on_ticket_idTotickets tickets  @relation("ticket_dependencies_depends_on_ticket_idTotickets", fields: [depends_on_ticket_id], references: [id], onDelete: Cascade, map: "fk_dependencies_prerequisite")
+  tickets_ticket_dependencies_ticket_idTotickets            tickets  @relation("ticket_dependencies_ticket_idTotickets", fields: [ticket_id], references: [id], onDelete: Cascade, map: "fk_dependencies_ticket")
+
+  @@id([ticket_id, depends_on_ticket_id])
+  @@index([depends_on_ticket_id], map: "idx_ticket_dependencies_depends_on")
   @@schema("bibz-agile")
 }
 

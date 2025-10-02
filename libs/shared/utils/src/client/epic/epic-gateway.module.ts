@@ -1,7 +1,7 @@
 import { Module } from "@nestjs/common";
 import { ClientsModule, Transport } from "@nestjs/microservices";
 import { join } from "node:path";
-import { SprintsGatewayService } from "./sprints.client";
+import { EpicsGatewayService } from "./epics.client";
 import { LoggerClientModule } from "@shared/logger";
 
 @Module({
@@ -9,12 +9,12 @@ import { LoggerClientModule } from "@shared/logger";
     LoggerClientModule,
     ClientsModule.register([
       {
-        name: "PROJECT_PACKAGE",
+        name: "EPICS_PACKAGE",
         transport: Transport.GRPC,
         options: {
           url: process.env.PROJECT_GRPC_URL ?? "localhost:50053",
-          package: "sprints.v1",
-          protoPath: [join(process.cwd(), "libs/proto/sprints/v1/sprints.proto")],
+          package: "epics.v1",
+          protoPath: [join(process.cwd(), "libs/proto/epics/v1/epics.proto")],
           loader: {
             keepCase: true,
             longs: String,
@@ -26,7 +26,7 @@ import { LoggerClientModule } from "@shared/logger";
       },
     ]),
   ],
-  providers: [SprintsGatewayService],
-  exports: [SprintsGatewayService],
+  providers: [EpicsGatewayService],
+  exports: [EpicsGatewayService],
 })
-export class SprintsGatewayModule {}
+export class EpicsGatewayModule {}

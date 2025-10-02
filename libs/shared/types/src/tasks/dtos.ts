@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString, Length, Max, Min, IsNumber, IsUUID, IsPositive } from "class-validator";
-import { Transform } from "class-transformer";
+import { Expose, Transform } from "class-transformer";
 import { ProfileOverview } from "../profile/dtos";
 import { EpicOverview } from "../epics/dtos";
 import { BasePaginationDto } from "../common/page";
@@ -34,6 +34,7 @@ export enum TaskPriority {
  * Aligned with Prisma schema and optimized for gRPC serialization
  */
 export class CreateTaskDto {
+  @Expose()
   @ApiProperty({
     description: "Task title - must be unique within the epic",
     example: "Implement user authentication API",
@@ -46,6 +47,7 @@ export class CreateTaskDto {
   })
   title!: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Detailed description of the task requirements and implementation details",
     example: "Create REST API endpoints for user login, registration, and password reset with JWT token management",
@@ -54,6 +56,7 @@ export class CreateTaskDto {
   @IsString()
   description?: string;
 
+  @Expose()
   @ApiProperty({
     description: "Epic ID that this task belongs to",
     example: 123,
@@ -62,6 +65,7 @@ export class CreateTaskDto {
   @IsPositive()
   epic_id!: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Current status of the task in the workflow",
     enum: TaskStatus,
@@ -74,6 +78,7 @@ export class CreateTaskDto {
   })
   status?: TaskStatus;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Priority level (0-100, where 0 is highest priority)",
     enum: TaskPriority,
@@ -93,6 +98,7 @@ export class CreateTaskDto {
   })
   priority?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Estimated hours to complete the task (format: 999.99)",
     example: 8.5,
@@ -108,6 +114,7 @@ export class CreateTaskDto {
   })
   estimated_hours?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Actual hours spent working on the task",
     default: 0,
@@ -125,6 +132,7 @@ export class CreateTaskDto {
   })
   actual_hours?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Due date for task completion (ISO 8601 date format)",
     example: "2024-02-15",
@@ -144,6 +152,7 @@ export class CreateTaskDto {
  * All fields are optional to support partial updates
  */
 export class UpdateTaskDto {
+  @Expose()
   @ApiPropertyOptional({
     description: "Updated task title",
     maxLength: 255,
@@ -157,6 +166,7 @@ export class UpdateTaskDto {
   })
   title?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Updated task description",
     example: "Updated description with OAuth integration requirements and JWT refresh tokens",
@@ -165,6 +175,7 @@ export class UpdateTaskDto {
   @IsString()
   description?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Move task to different epic",
     example: 124,
@@ -174,6 +185,7 @@ export class UpdateTaskDto {
   @IsPositive()
   epic_id?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Updated task status in workflow",
     enum: TaskStatus,
@@ -185,6 +197,7 @@ export class UpdateTaskDto {
   })
   status?: TaskStatus;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Updated priority level (0-100, where 0 is highest priority)",
     enum: TaskPriority,
@@ -203,6 +216,7 @@ export class UpdateTaskDto {
   })
   priority?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Completion timestamp when task is marked as DONE",
     example: "2024-02-10T15:30:00Z",
@@ -216,6 +230,7 @@ export class UpdateTaskDto {
   )
   completed_at?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Updated estimated hours to complete the task",
     example: 12.5,
@@ -231,6 +246,7 @@ export class UpdateTaskDto {
   })
   estimated_hours?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Updated actual hours spent working on the task",
     example: 10.5,
@@ -247,6 +263,7 @@ export class UpdateTaskDto {
   })
   actual_hours?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Updated due date for task completion",
     example: "2024-02-20",
@@ -266,12 +283,14 @@ export class UpdateTaskDto {
  * Optimized for gRPC serialization and performance
  */
 export class TaskOverview {
+  @Expose()
   @ApiProperty({
     description: "Unique task identifier",
     example: 123,
   })
   id!: number;
 
+  @Expose()
   @ApiProperty({
     description: "Task title for display purposes",
     example: "Implement user authentication API",
@@ -279,6 +298,7 @@ export class TaskOverview {
   })
   title!: string;
 
+  @Expose()
   @ApiProperty({
     description: "Current task status in the workflow",
     enum: TaskStatus,
@@ -286,6 +306,7 @@ export class TaskOverview {
   })
   status!: TaskStatus;
 
+  @Expose()
   @ApiProperty({
     description: "Task priority level (0-100, where 0 is highest priority)",
     example: 75,
@@ -300,12 +321,14 @@ export class TaskOverview {
  * Extends TaskOverview for comprehensive task representation
  */
 export class TaskDto extends TaskOverview {
+  @Expose()
   @ApiPropertyOptional({
     description: "Detailed description of the task requirements and implementation details",
     example: "Create REST API endpoints for user login, registration, and password reset with JWT token management",
   })
   description?: string;
 
+  @Expose()
   @ApiProperty({
     description: "Epic ID that this task belongs to",
     example: 456,
@@ -314,6 +337,7 @@ export class TaskDto extends TaskOverview {
   @IsPositive()
   epic_id!: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Estimated hours to complete the task (format: 999.99)",
     example: 8.5,
@@ -321,6 +345,7 @@ export class TaskDto extends TaskOverview {
   @IsNumber({ maxDecimalPlaces: 2 })
   estimated_hours?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Actual hours spent working on the task",
     example: 6.5,
@@ -329,30 +354,35 @@ export class TaskDto extends TaskOverview {
   @Min(0)
   actual_hours?: number;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Due date for task completion (ISO 8601 date format)",
     example: "2024-02-15",
   })
   due_date?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Completion timestamp when task is marked as DONE",
     example: "2024-02-10T15:30:00Z",
   })
   completed_at?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Task creation timestamp",
     example: "2024-01-15T10:30:00Z",
   })
   created_at?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Last modification timestamp",
     example: "2024-01-20T14:30:00Z",
   })
   updated_at?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "UUID of the user who created the task",
     example: "550e8400-e29b-41d4-a716-446655440000",
@@ -360,6 +390,7 @@ export class TaskDto extends TaskOverview {
   @IsUUID()
   created_by?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "UUID of the user who last modified the task",
     example: "550e8400-e29b-41d4-a716-446655440001",
@@ -367,18 +398,21 @@ export class TaskDto extends TaskOverview {
   @IsUUID()
   updated_by?: string;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "User profile information for the task creator",
     type: ProfileOverview,
   })
   created_by_user?: ProfileOverview;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "User profile information for the last modifier",
     type: ProfileOverview,
   })
   updated_by_user?: ProfileOverview;
 
+  @Expose()
   @ApiPropertyOptional({
     description: "Associated epic information",
     type: EpicOverview,
@@ -391,6 +425,7 @@ export class TaskDto extends TaskOverview {
  * Optimized for gRPC streaming and API performance with consistent pagination behavior
  */
 export class TaskListDto extends BasePaginationDto<TaskOverview> {
+  @Expose()
   @ApiProperty({
     type: [TaskOverview],
     description: "Array of task overview objects",

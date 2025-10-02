@@ -56,14 +56,14 @@ export class CreateTicketDto {
   @ApiProperty({ example: 12, description: "Sprint ID", required: false })
   sprint_id?: number;
 
-  @ApiProperty({ example: "b3fb243f-8368-47aa-bcc7-072f049db8af", description: "Parent ticket ID", required: false })
-  parent_ticket_id?: number | null;
-
   @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Task IDs", required: false })
-  task_id?: number[];
+  task_ids?: number[];
 
   @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Label IDs", required: false })
-  labels_id?: number[];
+  label_ids?: number[];
+
+  @ApiProperty({ type: [Number], example: [5, 6], description: "Ticket dependency IDs (tickets this one depends on)", required: false })
+  dependency_ticket_ids?: number[];
 }
 
 export class UpdateTicketDto {
@@ -116,10 +116,13 @@ export class UpdateTicketDto {
   parent_ticket_id?: number | null;
 
   @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Task IDs", required: false })
-  task_id?: number[];
+  task_ids?: number[];
 
   @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Label IDs", required: false })
-  labels_id?: number[];
+  label_ids?: number[];
+
+  @ApiProperty({ type: [Number], example: [5, 6], description: "Ticket dependency IDs (tickets this one depends on)", required: false })
+  dependency_ticket_ids?: number[];
 }
 
 export class TicketOverview {
@@ -151,7 +154,7 @@ export class TicketOverview {
 export class TicketDto extends TicketOverview {
   @Expose()
   @ApiProperty({ type: [Number], example: [], required: false })
-  task_id?: number[];
+  task_ids?: number[];
 
   @Expose()
   @ApiProperty({ example: null, required: false })
@@ -261,6 +264,15 @@ export class TicketDto extends TicketOverview {
     required: false,
   })
   labels?: LabelDto[];
+
+  @Expose()
+  @ApiProperty({
+    type: [Number],
+    example: [5, 6],
+    description: "IDs of tickets this ticket depends on",
+    required: false,
+  })
+  dependency_ticket_ids?: number[];
 }
 
 export class TicketsListDto extends BasePaginationDto<TicketDto> {
@@ -299,7 +311,6 @@ export const TicketDtoSelect = {
   status: true,
   priority: true,
   category: true,
-  task_id: true,
   parent_ticket_id: true,
   description: true,
   story_points: true,
@@ -311,6 +322,16 @@ export const TicketDtoSelect = {
   testing_notes: true,
   created_at: true,
   updated_at: true,
+  task_tickets: {
+    select: {
+      task_id: true,
+    },
+  },
+  ticket_dependencies_ticket_dependencies_ticket_idTotickets: {
+    select: {
+      depends_on_ticket_id: true,
+    },
+  },
 } as const;
 
 /**
@@ -392,12 +413,13 @@ export type PrismaTicketDto = {
   status: TicketStatus;
   priority: TicketPriority;
   category: TicketCategory;
-  task_id: number[] | null;
   parent_ticket_id: number | null;
   description: string | null;
   story_points: number | null;
   estimated_hours: number | null;
   actual_hours: number | null;
+  task_tickets: { task_id: number }[];
+  ticket_dependencies_ticket_dependencies_ticket_idTotickets: { depends_on_ticket_id: number }[];
   due_date: Date | null;
   completed_at: Date | null;
   implementation_notes: string | null;

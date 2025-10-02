@@ -100,7 +100,7 @@ export class AuthService {
       const refresh_token = await this.jwt.signAsync({ sub: user.id, typ: "refresh" }, { secret: this.refreshSecret, expiresIn: this.refreshTtl, algorithm: "HS256" });
       const expires_in = this.expiresInSeconds(this.accessTtl);
 
-      await this.logger.log({ 
+      await this.logger.log({
         level: "info",
         service: "auth",
         func: "verifyOtp",
@@ -164,7 +164,7 @@ export class AuthService {
         last_sign_in_at: u.last_sign_in_at ?? null,
       };
     } catch (err) {
-      await this.logger.log({ level: "warn", service: "auth", func: "getUser", message: "GetUser failed", data: { userId, reason: String((err as any)?.message ?? err) } });
+      await this.logger.log({ level: "warn", service: "auth", func: "getUser", message: "GetUser failed", data: { userId, reason: String(err?.message ?? err) } });
       throw new RpcException({ code: status.NOT_FOUND, message: "USER_NOT_FOUND" });
     }
   }
