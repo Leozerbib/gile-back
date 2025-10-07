@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags 
 import { LabelGatewayService } from "libs/shared/utils/src/client/workspace/label.client";
 import { Auth, CurrentUser } from "../auth-gateway/auth.decorators";
 import type { AuthenticatedUser } from "@shared/types";
-import { CreateLabelDto, UpdateLabelDto, LabelDto, LabelsListDto, BaseSearchQueryDto } from "@shared/types";
+import { CreateLabelDto, UpdateLabelDto, LabelDto, LabelsListDto, BaseSearchQueryDto, FilterOperator, FilterValueType } from "@shared/types";
 import { normalizeObject } from "@shared/utils";
 
 @ApiTags("Label")
@@ -61,7 +61,8 @@ export class LabelGatewayController {
       filters: [
         {
           field: "workspace_id",
-          operator: "equals",
+          type: FilterValueType.NUMBER,
+          op: FilterOperator.EQ,
           value: workspaceId,
         },
       ],
@@ -93,7 +94,8 @@ export class LabelGatewayController {
       filters: [
         {
           field: "workspace_id",
-          operator: "equals",
+          type: FilterValueType.NUMBER,
+          op: FilterOperator.EQ,
           value: workspaceId,
         },
       ],

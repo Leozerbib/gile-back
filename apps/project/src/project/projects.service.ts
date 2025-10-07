@@ -20,6 +20,7 @@ import {
   TeamOverview,
   TeamOverviewSelect,
   CreateTeamDto,
+  FilterRule,
 } from "@shared/types";
 import { plainToInstance } from "class-transformer";
 import { WorkspaceMembersService } from "apps/workspace/src/member/workspace-members.service";
@@ -120,59 +121,116 @@ export class ProjectsService {
     }
 
     try {
-      const project = await this.prisma.projects.create({
-        data: {
-          name: dto.name.trim(),
-          slug,
-          description: dto.description?.trim() ?? null,
-          full_description: dto.full_description?.trim() ?? null,
-          workspace_id: workspaceId,
-          project_manager_id: userId,
-          status: ProjectStatus.TODO,
-          priority: (dto.priority as ProjectPriority) ?? ProjectPriority.MEDIUM,
-          progress: 0,
-          start_date: dto.start_date ? new Date(dto.start_date) : null,
-          end_date: dto.end_date ? new Date(dto.end_date) : null,
-          is_public: dto.is_public ?? false,
-          created_by: userId,
-          updated_by: userId,
-        },
-        include: {
-          manager: {
-            select: ProfileOverviewSelect,
+      const project = await this.prisma.$transaction(async tx => {
+        // Check slug uniqueness inside transaction
+        const existingProject = await tx.projects.findFirst({
+          where: {
+            slug,
+            workspace_id: workspaceId,
           },
-          created_by_user: {
-            select: ProfileOverviewSelect,
+        });
+
+        if (existingProject) {
+          throw new RpcException({ code: status.ALREADY_EXISTS, message: `Project with slug "${slug}" already exists in this workspace` });
+        }
+
+        const createdProject = await tx.projects.create({
+          data: {
+            name: dto.name.trim(),
+            slug,
+            description: dto.description?.trim() ?? null,
+            full_description: dto.full_description?.trim() ?? null,
+            workspace_id: workspaceId,
+            project_manager_id: userId,
+            status: ProjectStatus.TODO,
+            priority: (dto.priority as ProjectPriority) ?? ProjectPriority.MEDIUM,
+            progress: 0,
+            start_date: dto.start_date ? new Date(dto.start_date) : null,
+            end_date: dto.end_date ? new Date(dto.end_date) : null,
+            is_public: dto.is_public ?? false,
+            created_by: userId,
+            updated_by: userId,
           },
-          updated_by_user: {
-            select: ProfileOverviewSelect,
+          include: {
+            manager: {
+              select: ProfileOverviewSelect,
+            },
+            created_by_user: {
+              select: ProfileOverviewSelect,
+            },
+            updated_by_user: {
+              select: ProfileOverviewSelect,
+            },
           },
-        },
+        });
+
+        if (!createdProject) {
+          throw new Error("Failed to create project");
+        }
+
+        if (dto.team_id) {
+          // Optional pre-check using existing service to maintain current behavior
+          const teamExists = await this.teamService.exist(dto.team_id);
+          if (!teamExists) {
+            throw new RpcException({ code: status.NOT_FOUND, message: `Team with ID "${dto.team_id}" not found` });
+          }
+
+          // Validate team in the same workspace and assign within transaction
+          const team = await tx.teams.findUnique({
+            where: { id: dto.team_id },
+            select: { id: true, workspace_id: true, name: true },
+          });
+
+          if (!team) {
+            throw new RpcException({ code: status.NOT_FOUND, message: `Team with ID "${dto.team_id}" not found` });
+          }
+
+          if (team.workspace_id !== workspaceId) {
+            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Team and project must belong to the same workspace" });
+          }
+
+          const existingAssignment = await tx.project_teams.findFirst({
+            where: {
+              project_id: createdProject.id,
+              team_id: dto.team_id,
+            },
+          });
+
+          if (existingAssignment) {
+            throw new RpcException({ code: status.ALREADY_EXISTS, message: "Team is already assigned to this project" });
+          }
+
+          await tx.project_teams.create({
+            data: {
+              project_id: createdProject.id,
+              team_id: dto.team_id,
+              created_by: userId,
+            },
+          });
+        } else {
+          // Create team via gateway and assign within the same transaction
+          const createTeam: CreateTeamDto = {
+            name: createdProject.name + " Team",
+            description: "Team for project " + createdProject.name,
+            avatar_url: undefined,
+            workspace_id: workspaceId,
+          };
+          const created_team = await this.teamGatewayService.create(userId, workspaceId, createTeam);
+          if (!created_team) {
+            throw new Error("Failed to create team for project");
+          }
+
+          await tx.project_teams.create({
+            data: {
+              project_id: createdProject.id,
+              team_id: created_team.id,
+              created_by: userId,
+            },
+          });
+        }
+
+        return createdProject;
       });
-
-      if (!project) {
-        throw new Error("Failed to create project");
-      }
-
-      if (dto.team_id) {
-        const teamExists = await this.teamService.exist(dto.team_id);
-        if (!teamExists) {
-          throw new RpcException({ code: status.NOT_FOUND, message: `Team with ID "${dto.team_id}" not found` });
-        }
-        await this.assignTeam(project.id, dto.team_id, userId);
-      } else {
-        const createTeam: CreateTeamDto = {
-          name: project.name + " Team",
-          description: "Team for project " + project.name,
-          avatar_url: undefined,
-          workspace_id: workspaceId,
-        };
-        const created_team = await this.teamGatewayService.create(workspaceId, userId, createTeam);
-        if (!created_team) {
-          throw new Error("Failed to create team for project");
-        }
-        await this.assignTeam(project.id, created_team.id, userId);
-      }
 
       await this.loggerClient.log({
         level: "info",
@@ -251,25 +309,8 @@ export class ProjectsService {
     const searchConditions = SearchQueryBuilder.buildSearchConditions(params?.search, ["name", "description"]);
     where = { ...where, ...searchConditions };
 
-    // Apply filters with simple mapping from camelCase to DB columns
-    const filterMapping: Record<string, string> = {
-      status: "status",
-      priority: "priority",
-      isArchived: "is_archived",
-      isPublic: "is_public",
-      projectManagerId: "project_manager_id",
-      name: "name",
-    };
-
     if (params?.filters) {
-      const prismaFilters: Prisma.projectsWhereInput = {};
-      for (const [key, value] of Object.entries(params.filters)) {
-        const mappedKey = filterMapping[key] ?? key;
-        // Basic equals filter; extend as needed
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        prismaFilters[mappedKey] = value;
-      }
-      where = SearchQueryBuilder.applyFilters(where, prismaFilters);
+      where = SearchQueryBuilder.applyFilters(where, params.filters);
     }
 
     // Build orderBy from sort options, mapping fields to DB columns

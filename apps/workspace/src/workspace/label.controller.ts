@@ -198,7 +198,7 @@ export class LabelController {
         service: "workspace",
         func: "label.getOverview",
         message: `Labels overview retrieved via gRPC`,
-        data: { workspaceId: data.workspaceId, total: list.total, count: list.items.length },
+        data: { workspaceId: data.workspaceId, total: list.total, count: list.items.length, hasNext: list.has_next },
       });
 
       return list;

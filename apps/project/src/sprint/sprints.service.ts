@@ -11,6 +11,7 @@ import {
   SearchQueryBuilder,
   BasePaginationDto,
   SprintOverview,
+  FilterRule,
 } from "@shared/types";
 import { Prisma } from "@prisma/client";
 import { plainToInstance } from "class-transformer";
@@ -127,35 +128,28 @@ export class SprintsService {
         where = { ...where, ...searchConditions };
       }
 
-      // Apply filters from BaseSearchQueryDto
+      // Apply filters from BaseSearchQueryDto (supports rule-array or legacy object)
       if (filters) {
-        // Project filter
-        if (filters.project_id) {
-          where.project_id = Number(filters.project_id);
-        }
-
-        // Status filter
-        if (filters.status) {
-          if (Array.isArray(filters.status)) {
-            where.status = { in: filters.status };
-          } else {
-            where.status = filters.status as SprintStatus;
-          }
-        }
-
-        // Version filter
-        if (filters.version) {
-          where.version = Number(filters.version);
-        }
-
-        // Created by filter
-        if (filters.created_by) {
-          where.created_by = filters.created_by as string;
-        }
+        where = SearchQueryBuilder.applyFilters(where, filters);
       }
 
-      // Build sort options
-      const orderBy = SearchQueryBuilder.buildSortOptions(sortBy);
+      // Build orderBy from sort options, mapping fields to DB columns
+      const sortOptions = SearchQueryBuilder.buildSortOptions(sortBy);
+      const fieldMapping: Record<string, keyof Prisma.sprintsOrderByWithRelationInput> = {
+        createdAt: "created_at",
+        updatedAt: "updated_at",
+        name: "name",
+        status: "status",
+        startDate: "start_date",
+        endDate: "end_date",
+        version: "version",
+      };
+      const orderByArray: Prisma.sprintsOrderByWithRelationInput[] = [];
+      for (const [field, direction] of Object.entries(sortOptions)) {
+        const mapped = fieldMapping[field] ?? (field as keyof Prisma.sprintsOrderByWithRelationInput);
+        orderByArray.push({ [mapped]: direction as Prisma.SortOrder } as Prisma.sprintsOrderByWithRelationInput);
+      }
+      const orderBy = orderByArray.length > 0 ? orderByArray : [{ created_at: Prisma.SortOrder.desc }];
 
       // Execute queries
       const [itemsRaw, total] = await Promise.all([

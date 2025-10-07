@@ -4,7 +4,7 @@ import { status } from "@grpc/grpc-js";
 import { PrismaService } from "@shared/prisma";
 import { LoggerClientService } from "@shared/logger";
 import { plainToInstance } from "class-transformer";
-import { CreateEpicDto, UpdateEpicDto, EpicDto, EpicListDto, BaseSearchQueryDto, EpicDtoSelect, EpicListSelect, EpicOverview, BasePaginationDto } from "@shared/types";
+import { CreateEpicDto, UpdateEpicDto, EpicDto, EpicListDto, BaseSearchQueryDto, EpicDtoSelect, EpicListSelect, EpicOverview, BasePaginationDto, SearchQueryBuilder } from "@shared/types";
 import { TeamMembersService } from "apps/workspace/src/team/team-members.service";
 import { Prisma, EpicStatus, EpicCategory } from "@prisma/client";
 
@@ -38,29 +38,6 @@ export class EpicsService {
     }
     const team_id = await this.getProjectTeamIdOrThrow(epic.project_id);
     return { team_id, project_id: epic.project_id };
-  }
-
-  private buildOrderBy(sortBy?: BaseSearchQueryDto["sortBy"]): Record<string, "asc" | "desc">[] | undefined {
-    if (!sortBy || sortBy.length === 0) return [{ created_at: "desc" }];
-    const mapping: Record<string, string> = {
-      id: "id",
-      title: "title",
-      status: "status",
-      priority: "priority",
-      progress: "progress",
-      createdAt: "created_at",
-      created_at: "created_at",
-      updatedAt: "updated_at",
-      updated_at: "updated_at",
-      start_date: "start_date",
-      end_date: "end_date",
-    };
-    const orderBy: Record<string, "asc" | "desc">[] = [];
-    for (const s of sortBy) {
-      const field = mapping[s.field] ?? s.field;
-      orderBy.push({ [field]: s.order?.toLowerCase?.() === "asc" ? "asc" : "desc" });
-    }
-    return orderBy;
   }
 
   // Create Epic
@@ -152,7 +129,7 @@ export class EpicsService {
       Object.assign(where, params.filters as Prisma.epicsWhereInput);
     }
 
-    const orderBy = this.buildOrderBy(params?.sortBy);
+    const orderBy = SearchQueryBuilder.buildSortOptions(params?.sortBy);
 
     const [items, total] = await this.prisma.$transaction([this.prisma.epics.findMany({ where, orderBy, skip, take, select: EpicListSelect }), this.prisma.epics.count({ where })]);
 

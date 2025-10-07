@@ -6,6 +6,14 @@ import { GrpcToHttpExceptionFilter } from "./common/filters/grpc-exception.filte
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Enable CORS for frontend requests
+  app.enableCors({
+    origin: ["http://localhost:4000", "http://127.0.0.1:4000"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Accept"],
+    credentials: true,
+  });
+
   // Global error handler for gRPC connectivity issues (use DI-provided filter)
   const grpcFilter = app.get(GrpcToHttpExceptionFilter);
   app.useGlobalFilters(grpcFilter);

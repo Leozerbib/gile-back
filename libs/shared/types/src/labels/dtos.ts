@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { IsOptional, IsString, Length, Matches, IsUUID } from "class-validator";
 import { BasePaginationDto } from "../common/page";
 import { Expose } from "class-transformer";
+import { ProfileOverview } from "../profile/dtos";
 
 export class CreateLabelDto {
   @ApiProperty({
@@ -99,6 +100,20 @@ export class LabelDto {
     example: "#FF6B6B",
   })
   color: string;
+
+  @Expose()
+  @ApiProperty({
+    description: "Date de création du label",
+    example: "2023-01-01T00:00:00.000Z",
+  })
+  created_at!: Date;
+
+  @Expose()
+  @ApiProperty({
+    description: "Utilisateur qui a créé le label",
+    type: ProfileOverview,
+  })
+  created_by_user!: ProfileOverview;
 }
 
 export class LabelsListDto extends BasePaginationDto<LabelDto> {
@@ -109,22 +124,13 @@ export class LabelsListDto extends BasePaginationDto<LabelDto> {
   items: LabelDto[];
 }
 
-// Prisma select types for type-safe queries
-export const LabelOverviewSelect = {
-  id: true,
-  name: true,
-  color: true,
-} as const;
-
 export const LabelDtoSelect = {
   id: true,
   name: true,
   description: true,
   color: true,
-} as const;
-
-export const LabelListSelect = {
-  ...LabelOverviewSelect,
+  created_at: true,
+  created_by_user: true,
 } as const;
 
 // Type helpers for Prisma query return types

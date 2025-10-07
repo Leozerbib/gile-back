@@ -1,5 +1,5 @@
 import { ApiProperty } from "@nestjs/swagger";
-import { IsOptional, IsString, IsObject, IsEnum } from "class-validator";
+import { IsOptional, IsString, IsObject, IsEnum, IsArray } from "class-validator";
 import { Expose, Type } from "class-transformer";
 import { BasePaginationDto, PaginationQueryDto, PaginationMeta } from "./page";
 
@@ -9,6 +9,13 @@ import { BasePaginationDto, PaginationQueryDto, PaginationMeta } from "./page";
 export enum SortOrder {
   ASC = "ASC",
   DESC = "DESC",
+}
+
+export enum Granularity {
+  DAY = "DAY",
+  WEEK = "WEEK",
+  MONTH = "MONTH",
+  YEAR = "YEAR",
 }
 
 export class SortOption {
@@ -45,22 +52,73 @@ export class GroupByOption {
   field!: string;
 
   @ApiProperty({
-    description: "Sous-champ de groupement optionnel",
-    example: "priority",
+    description: "Champ granularity de groupement",
+    example: Granularity.DAY,
     type: "string",
-    required: false,
   })
   @Expose()
-  @IsOptional()
-  @IsString()
-  subField?: string;
+  @IsEnum(Granularity)
+  fieldGranularity?: Granularity;
 }
 
 /**
  * Interface pour les filtres génériques
  */
-export interface SearchFilter {
-  [key: string]: any;
+export enum FilterValueType {
+  STRING = "string",
+  NUMBER = "number",
+  DATE = "date",
+  ENUM = "enum",
+}
+
+export enum FilterOperator {
+  EQ = "eq",
+  NEQ = "neq",
+  GT = "gt",
+  GTE = "gte",
+  LT = "lt",
+  LTE = "lte",
+  BETWEEN = "between",
+  IN = "in",
+  NOT_IN = "not_in",
+  CONTAINS = "contains",
+  STARTS_WITH = "starts_with",
+  ENDS_WITH = "ends_with",
+  IS_NULL = "is_null",
+  NOT_NULL = "not_null",
+}
+
+export class FilterRule {
+  @ApiProperty({ description: "Champ (clé) à filtrer", example: "status", type: "string" })
+  @Expose()
+  @IsString()
+  field!: string;
+
+  @ApiProperty({ description: "Type de valeur", enum: FilterValueType })
+  @Expose()
+  @IsEnum(FilterValueType)
+  type!: FilterValueType;
+
+  @ApiProperty({ description: "Opérateur de filtre", enum: FilterOperator })
+  @Expose()
+  @IsEnum(FilterOperator)
+  op!: FilterOperator;
+
+  @ApiProperty({ description: "Valeur unique (si applicable)", required: false })
+  @Expose()
+  @IsOptional()
+  value?: string | number | null;
+
+  @ApiProperty({ description: "Liste de valeurs (si applicable)", required: false, type: [String] })
+  @Expose()
+  @IsOptional()
+  @IsArray()
+  values?: Array<string | number>;
+
+  @ApiProperty({ description: "Sensibilité à la casse pour les filtres string", required: false, example: true })
+  @Expose()
+  @IsOptional()
+  caseInsensitive?: boolean;
 }
 
 /**
@@ -97,7 +155,7 @@ export class BaseSearchQueryDto extends PaginationQueryDto {
   @Expose()
   @Type(() => SortOption)
   @IsOptional()
-  sortBy?: SortOption[];
+  sortBy?: SortOption;
 
   @ApiProperty({
     description: "Options de groupement",
@@ -123,14 +181,20 @@ export class BaseSearchQueryDto extends PaginationQueryDto {
 
   @ApiProperty({
     description: "Filtres spécifiques à appliquer",
-    example: { status: "active", priority: "high", category: "bug" },
-    type: "object",
-    additionalProperties: true,
+    example: [
+      { field: "status", type: "enum", op: "in", values: ["Active", "Planned"] },
+      { field: "createdAt", type: "date", op: "between", values: ["2025-01-01", "2025-12-31"] },
+      { field: "version", type: "number", op: "gte", value: 0.2 },
+      { field: "name", type: "string", op: "contains", value: "Q1", caseInsensitive: true },
+    ],
+    oneOf: [
+      { type: "array", items: { type: "object" } },
+      { type: "object", additionalProperties: true },
+    ],
   })
   @Expose()
   @IsOptional()
-  @IsObject({ message: "Les filtres doivent être un objet" })
-  filters?: SearchFilter;
+  filters?: FilterRule[];
 }
 
 /**
@@ -162,15 +226,13 @@ export class SearchQueryBuilder {
   /**
    * Construit les options de tri pour Prisma
    */
-  static buildSortOptions(sortOptions?: SortOption[]): Record<string, "asc" | "desc"> {
-    if (!sortOptions || sortOptions.length === 0) {
+  static buildSortOptions(sortOptions?: SortOption): Record<string, "asc" | "desc"> {
+    if (!sortOptions) {
       return { createdAt: "desc" as const }; // Tri par défaut
     }
 
     const sort: Record<string, "asc" | "desc"> = {};
-    sortOptions.forEach(option => {
-      sort[option.field] = option.order.toLowerCase() as "asc" | "desc";
-    });
+    sort[sortOptions.field] = sortOptions.order.toLowerCase() as "asc" | "desc";
 
     return sort;
   }
@@ -196,12 +258,87 @@ export class SearchQueryBuilder {
   /**
    * Applique les filtres à une requête
    */
-  static applyFilters<T extends Record<string, any>>(query: T, filters?: SearchFilter): T {
+  static applyFilters<T extends Record<string, any>>(query: T, filters?: FilterRule[]): T {
     if (!filters) {
       return query;
     }
 
-    return { ...query, ...filters };
+    const where = this.buildWhereFromFilterRules(filters);
+    return { ...query, ...where } as T;
+  }
+
+  /**
+   * Convertit un tableau de FilterRule en conditions compatibles Prisma
+   */
+  static buildWhereFromFilterRules(rules: FilterRule[]): Record<string, any> {
+    const where: Record<string, any> = {};
+
+    const mergeCond = (cond: Record<string, any>) => {
+      Object.entries(cond).forEach(([key, val]) => {
+        if (key === "OR" || key === "AND") {
+          where[key] = [...(where[key] ?? []), ...(val as any[])];
+        } else if (where[key] && typeof where[key] === "object" && typeof val === "object") {
+          where[key] = { ...where[key], ...val };
+        } else {
+          where[key] = val;
+        }
+      });
+    };
+
+    for (const rule of rules) {
+      const f = rule.field;
+      const ci = rule.caseInsensitive ? { mode: "insensitive" as const } : {};
+      switch (rule.op) {
+        case FilterOperator.EQ:
+          mergeCond({ [f]: rule.value });
+          break;
+        case FilterOperator.NEQ:
+          mergeCond({ NOT: { [f]: rule.value } });
+          break;
+        case FilterOperator.GT:
+          mergeCond({ [f]: { gt: rule.value } });
+          break;
+        case FilterOperator.GTE:
+          mergeCond({ [f]: { gte: rule.value } });
+          break;
+        case FilterOperator.LT:
+          mergeCond({ [f]: { lt: rule.value } });
+          break;
+        case FilterOperator.LTE:
+          mergeCond({ [f]: { lte: rule.value } });
+          break;
+        case FilterOperator.BETWEEN:
+          if (rule.values && rule.values.length >= 2) {
+            mergeCond({ [f]: { gte: rule.values[0], lte: rule.values[1] } });
+          }
+          break;
+        case FilterOperator.IN:
+          mergeCond({ [f]: { in: rule.values ?? [] } });
+          break;
+        case FilterOperator.NOT_IN:
+          mergeCond({ [f]: { notIn: rule.values ?? [] } });
+          break;
+        case FilterOperator.CONTAINS:
+          mergeCond({ [f]: { contains: rule.value, ...ci } });
+          break;
+        case FilterOperator.STARTS_WITH:
+          mergeCond({ [f]: { startsWith: rule.value, ...ci } });
+          break;
+        case FilterOperator.ENDS_WITH:
+          mergeCond({ [f]: { endsWith: rule.value, ...ci } });
+          break;
+        case FilterOperator.IS_NULL:
+          mergeCond({ [f]: null });
+          break;
+        case FilterOperator.NOT_NULL:
+          mergeCond({ NOT: { [f]: null } });
+          break;
+        default:
+          break;
+      }
+    }
+
+    return where;
   }
 
   /**

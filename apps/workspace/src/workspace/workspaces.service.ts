@@ -213,7 +213,7 @@ export class WorkspacesService {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         prismaFilters[mappedKey] = value;
       }
-      where = SearchQueryBuilder.applyFilters(where, prismaFilters);
+      where = SearchQueryBuilder.applyFilters(where, params.filters);
     }
 
     // Build orderBy from sort options, mapping fields to DB columns

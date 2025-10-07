@@ -15,7 +15,13 @@ export class EpicsController {
   // Create a new epic
   @GrpcMethod("EpicsService", "Create")
   async create(data: { user_id: string; epic: CreateEpicDto }): Promise<EpicDto> {
-    await this.logger.log({ level: "info", service: "epic", func: "epics.grpc.create", message: "gRPC Create epic request", data: { user_id: data.user_id, epic: { ...data.epic } } });
+    await this.logger.log({
+      level: "info",
+      service: "epic",
+      func: "epics.grpc.create",
+      message: "gRPC Create epic request",
+      data: { user_id: data.user_id, epic: { ...data.epic } },
+    });
 
     const epic = await this.epicsService.create(data.user_id, data.epic);
 
@@ -76,7 +82,13 @@ export class EpicsController {
   // Update epic
   @GrpcMethod("EpicsService", "Update")
   async update(data: { user_id: string; id: number | string; epic: UpdateEpicDto }): Promise<EpicDto> {
-    await this.logger.log({ level: "info", service: "epic", func: "epics.grpc.update", message: `gRPC Update epic request for id ${data.id}`, data: { user_id: data.user_id, id: data.id, epic: { ...data.epic } } });
+    await this.logger.log({
+      level: "info",
+      service: "epic",
+      func: "epics.grpc.update",
+      message: `gRPC Update epic request for id ${data.id}`,
+      data: { user_id: data.user_id, id: data.id, epic: { ...data.epic } },
+    });
 
     const id = typeof data.id === "string" ? Number(data.id) : data.id;
     const epic = await this.epicsService.update(id, data.epic, data.user_id);

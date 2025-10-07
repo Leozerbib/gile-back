@@ -77,7 +77,7 @@ export abstract class BasePaginationDto<T> {
   })
   @Expose()
   @IsOptional()
-  hasNext?: boolean;
+  has_next?: boolean;
 
   @ApiProperty({
     description: "Indique s'il y a une page précédente",
@@ -86,14 +86,14 @@ export abstract class BasePaginationDto<T> {
   })
   @Expose()
   @IsOptional()
-  hasPrev?: boolean;
+  has_prev?: boolean;
 
   /**
    * Calcule automatiquement les propriétés de navigation
    */
   protected calculateNavigationProperties(): void {
-    this.hasNext = this.skip + this.take < this.total;
-    this.hasPrev = this.skip > 0;
+    this.has_next = this.skip + this.take < this.total;
+    this.has_prev = this.skip > 0;
   }
 
   /**

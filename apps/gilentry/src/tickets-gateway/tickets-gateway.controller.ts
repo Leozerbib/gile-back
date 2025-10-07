@@ -2,7 +2,22 @@ import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from
 import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
 import { TicketsGatewayService } from "libs/shared/utils/src/client/ticket/tickets.client";
 import { Auth, CurrentUser } from "../auth-gateway/auth.decorators";
-import { CreateTicketDto, UpdateTicketDto, TicketDto, TicketsListDto, BaseSearchQueryDto } from "@shared/types";
+import {
+  CreateTicketDto,
+  UpdateTicketDto,
+  TicketDto,
+  TicketsListDto,
+  BaseSearchQueryDto,
+  SortOrder,
+  FilterRule,
+  FilterOperator,
+  FilterValueType,
+  TicketSortField,
+  TicketGroupField,
+  TicketSubGroupField,
+  GroupByOption,
+  Granularity,
+} from "@shared/types";
 import type { AuthenticatedUser } from "@shared/types";
 import { normalizeObject } from "@shared/utils";
 
@@ -27,22 +42,42 @@ export class TicketsGatewayController {
   @Auth()
   @ApiOperation({ summary: "Get all tickets with filters" })
   @ApiQuery({ name: "project_id", required: false, schema: { type: "integer", minimum: 1, nullable: true } })
-  @ApiQuery({ name: "sprint_id", required: false, schema: { type: "integer", minimum: 1, nullable: true } })
-  @ApiQuery({ name: "sprintIds", required: false, schema: { type: "string", nullable: true, example: "1,2,3" } })
-  @ApiQuery({ name: "status", required: false, schema: { type: "string", nullable: true } })
-  @ApiQuery({ name: "statusIn", required: false, schema: { type: "string", nullable: true, example: "Todo,Active" } })
-  @ApiQuery({ name: "priority", required: false, schema: { type: "string", nullable: true } })
-  @ApiQuery({ name: "priorityIn", required: false, schema: { type: "string", nullable: true, example: "Low,High" } })
-  @ApiQuery({ name: "category", required: false, schema: { type: "string", nullable: true } })
-  @ApiQuery({ name: "categoryIn", required: false, schema: { type: "string", nullable: true, example: "Task,Bug" } })
-  @ApiQuery({ name: "assignToIn", required: false, schema: { type: "string", nullable: true, example: "user-uuid-1,user-uuid-2" } })
-  @ApiQuery({ name: "labelIds", required: false, schema: { type: "string", nullable: true, example: "3,5,9" } })
   @ApiQuery({
-    name: "_sort",
+    name: "filter",
     required: false,
-    schema: { type: "string", nullable: true, example: "createdAt|updatedAt|title|status|priority|category|story_points|sprint|assignee" },
+    schema: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          field: { type: "string" },
+          type: { type: "string", enum: Object.values(FilterValueType) },
+          op: { type: "string", enum: Object.values(FilterOperator) },
+          values: { type: "array", items: { type: "string" } },
+        },
+      },
+      nullable: true,
+      examples: {
+        rules: {
+          summary: "Rule-based filters",
+          value: '[{"field":"status","type":"enum","op":"in","values":["TODO","ACTIVE"]},{"field":"createdAt","type":"date","op":"between","values":["2025-01-01","2025-12-31"]}]',
+        },
+        legacy: {
+          summary: "Legacy object filters",
+          value: '{"status_in":["TODO","ACTIVE"],"createdAt_gte":"2025-01-01"}',
+        },
+      },
+    },
   })
-  @ApiQuery({ name: "_order", required: false, schema: { type: "string", nullable: true, example: "asc|desc" } })
+  @ApiQuery({
+    name: "sort",
+    required: false,
+    schema: { type: "string", enum: Object.values(TicketSortField), nullable: true },
+  })
+  @ApiQuery({ name: "groupBy", required: false, schema: { type: "string", enum: Object.values(TicketGroupField), nullable: true } })
+  @ApiQuery({ name: "subGroupBy", required: false, schema: { type: "string", enum: Object.values(TicketSubGroupField), nullable: true } })
+  @ApiQuery({ name: "dateGranularity", required: false, schema: { type: "string", enum: Object.values(Granularity), nullable: true } })
+  @ApiQuery({ name: "order", required: false, schema: { type: "string", nullable: true, enum: Object.values(SortOrder) } })
   @ApiQuery({ name: "skip", required: false, schema: { type: "integer", minimum: 0, default: 0, nullable: true } })
   @ApiQuery({ name: "take", required: false, schema: { type: "integer", minimum: 1, default: 50, nullable: true } })
   @ApiQuery({ name: "search", required: false, schema: { type: "string", nullable: true } })
@@ -50,69 +85,48 @@ export class TicketsGatewayController {
   async list(
     @CurrentUser() user: AuthenticatedUser,
     @Query("project_id") projectId?: string,
-    @Query("sprint_id") sprintId?: string,
-    @Query("sprintIds") sprintIds?: string,
-    @Query("status") status?: string,
-    @Query("statusIn") statusIn?: string,
-    @Query("priority") priority?: string,
-    @Query("priorityIn") priorityIn?: string,
-    @Query("category") category?: string,
-    @Query("categoryIn") categoryIn?: string,
-    @Query("assignToIn") assignToIn?: string,
-    @Query("labelIds") labelIds?: string,
-    @Query("_sort") sort?: string,
-    @Query("_order") order?: string,
+    @Query("sort") sort?: string,
+    @Query("order") order?: string,
     @Query("skip") skip?: string,
     @Query("take") take?: string,
     @Query("search") search?: string,
+    @Query("groupBy") groupBy?: string,
+    @Query("subGroupBy") subGroupBy?: string,
+    @Query("dateGranularity") dateGranularity?: string,
+    @Body("filter") filter?: FilterRule[],
   ): Promise<TicketsListDto> {
     const isNullish = (v?: string) => v == null || v === "" || v.toLowerCase?.() === "null";
-    const listIds = !isNullish(sprintIds)
-      ? String(sprintIds)
-          .split(",")
-          .map(s => Number(s.trim()))
-          .filter(n => Number.isFinite(n) && n > 0)
-      : undefined;
-    const parseList = (v?: string): string[] | undefined =>
-      !isNullish(v)
-        ? String(v)
-            .split(",")
-            .map(s => s.trim())
-            .filter(s => s.length > 0)
-        : undefined;
-    const parseNumList = (v?: string): number[] | undefined =>
-      !isNullish(v)
-        ? String(v)
-            .split(",")
-            .map(s => Number(s.trim()))
-            .filter(n => Number.isFinite(n) && n > 0)
-        : undefined;
+    const inSet = (v?: string, allowed?: readonly string[]) => (v && allowed?.includes(v) ? v : undefined);
+    const granularity = !isNullish(dateGranularity) ? String(dateGranularity) : "day";
+    let filterObj: Record<string, unknown> | undefined;
+    const filterRules: FilterRule[] | undefined = filter;
 
+    const extraRules: FilterRule[] = [];
+    if (!isNullish(projectId)) extraRules.push({ field: "project_id", type: FilterValueType.NUMBER, op: FilterOperator.EQ, value: Number(projectId) });
+
+    const sortField = inSet(sort, Object.values(TicketSortField));
+    const groupField = inSet(groupBy, Object.values(TicketGroupField));
+    const subGroupField = inSet(subGroupBy, Object.values(TicketSubGroupField));
     const params: BaseSearchQueryDto = {
       search: !isNullish(search) ? search : undefined,
       skip: !isNullish(skip) ? Number(skip) : undefined,
       take: !isNullish(take) ? Number(take) : undefined,
-      sortBy: !isNullish(sort)
+      sortBy: sortField
         ? [
             {
-              field: String(sort),
-              order: order?.toUpperCase() === "ASC" || order?.toUpperCase() === "DESC" ? (order.toUpperCase() as "ASC" | "DESC") : ("DESC" as const),
+              field: String(sortField),
+              order: order?.toUpperCase() === "ASC" ? SortOrder.ASC : SortOrder.DESC,
             },
           ]
         : undefined,
-      filters: {
-        project_id: !isNullish(projectId) ? Number(projectId) : undefined,
-        sprint_id: !isNullish(sprintId) ? Number(sprintId) : undefined,
-        sprint_ids: listIds && listIds.length ? listIds : undefined,
-        status: !isNullish(status) ? status : undefined,
-        status_in: parseList(statusIn),
-        priority: !isNullish(priority) ? priority : undefined,
-        priority_in: parseList(priorityIn),
-        category: !isNullish(category) ? category : undefined,
-        category_in: parseList(categoryIn),
-        assign_to_in: parseList(assignToIn),
-        label_ids: parseNumList(labelIds),
-      },
+      groupBy: groupField ? ({ field: String(groupField), fieldGranularity: granularity } as GroupByOption) : undefined,
+      subGroupBy: subGroupField ? ({ field: String(subGroupField), fieldGranularity: granularity } as GroupByOption) : undefined,
+      filters: filterRules
+        ? [...filterRules, ...extraRules]
+        : {
+            ...(filterObj ?? {}),
+            project_id: !isNullish(projectId) ? Number(projectId) : undefined,
+          },
     } as BaseSearchQueryDto;
 
     const res = await this.tickets.findAll(user.user_id, params);
@@ -143,7 +157,7 @@ export class TicketsGatewayController {
         search: !isNullish(search) ? search : undefined,
         skip: !isNullish(skip) ? Number(skip) : 0,
         take: !isNullish(take) ? Number(take) : 20,
-        filters: { project_id: pid },
+        filters: [{ field: "project_id", type: FilterValueType.NUMBER, op: FilterOperator.EQ, value: pid }],
       });
 
       const normalized = normalizeObject(res) as TicketsListDto;

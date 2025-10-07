@@ -493,11 +493,25 @@ export class WorkspaceMembersService {
   ): Promise<boolean> {
     const role = await this.getUserRole(workspaceId, userId);
     if (role === null) {
+      await this.loggerClient.log({
+        level: "info",
+        service: "workspace",
+        func: "workspace-members.hasRight",
+        message: `User ${userId} is not a member of workspace ${workspaceId}`,
+        data: { workspaceId, userId, action, resource },
+      });
       if (await this.hasMember(workspaceId)) {
         return false;
       }
       return true;
     }
+    await this.loggerClient.log({
+      level: "info",
+      service: "workspace",
+      func: "workspace-members.hasRight",
+      message: `User ${userId} has role ${role} in workspace ${workspaceId}`,
+      data: { workspaceId, userId, action, resource },
+    });
     // Super admin a tous les droits
     if (role === WorkspaceRole.SUPER_ADMIN) {
       return true;

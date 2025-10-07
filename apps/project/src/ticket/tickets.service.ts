@@ -19,6 +19,8 @@ import {
   ProjectOverviewSelect,
   LabelDtoSelect,
   LabelDto,
+  SearchQueryBuilder,
+  FilterRule,
 } from "@shared/types";
 import { plainToInstance } from "class-transformer";
 
@@ -264,50 +266,40 @@ export class TicketsService {
     const take = query.take || 25;
 
     try {
-      const where: Prisma.ticketsWhereInput = {};
+      let where: Prisma.ticketsWhereInput = {};
 
-      // Handle search term
-      if (search && search.trim()) {
-        where.title = { contains: search.trim(), mode: "insensitive" };
-      }
+      // Text search across title and description
+      const searchConditions = SearchQueryBuilder.buildSearchConditions(search, ["title", "description"]);
+      where = { ...where, ...searchConditions };
 
-      // Handle filters from BaseSearchQueryDto
+      // Handle filters (supports FilterRule[] or legacy object)
       if (filters) {
-        if (typeof filters.project_id === "number") where.project_id = filters.project_id;
-        if (Array.isArray(filters.sprint_ids) && filters.sprint_ids.length) where.sprint_id = { in: filters.sprint_ids };
-        else if (typeof filters.sprint_id === "number") where.sprint_id = filters.sprint_id;
-        if (Array.isArray(filters.status_in) && filters.status_in.length) where.status = { in: filters.status_in };
-        if (Array.isArray(filters.assign_to_in) && filters.assign_to_in.length) where.assigned_to = { in: filters.assign_to_in };
-        if (Array.isArray(filters.label_ids) && filters.label_ids.length) {
-          where.labels = { some: { label_id: { in: filters.label_ids } } };
-        }
+        where = SearchQueryBuilder.applyFilters(where, filters);
       }
 
-      // Sorting configuration
-      const ORDER_MAP: Record<string, Prisma.ticketsOrderByWithRelationInput> = {
-        createdAt: { created_at: "desc" },
-        updatedAt: { updated_at: "desc" },
-        name: { title: "asc" },
-        title: { title: "asc" },
-        status: { status: "asc" },
-        priority: { priority: "asc" },
-        category: { category: "asc" },
-        value: { story_points: "asc" },
-        story_points: { story_points: "asc" },
+      // Sorting configuration using shared builder
+      const sortOptions = SearchQueryBuilder.buildSortOptions(sortBy);
+      const fieldMapping: Record<string, keyof Prisma.ticketsOrderByWithRelationInput> = {
+        createdAt: "created_at",
+        updatedAt: "updated_at",
+        title: "title",
+        status: "status",
+        priority: "priority",
+        category: "category",
+        story_points: "story_points",
+        estimated_hours: "estimated_hours",
+        actual_hours: "actual_hours",
+        dueDate: "due_date",
+        completedAt: "completed_at",
       };
 
-      let orderBy: Prisma.ticketsOrderByWithRelationInput = { created_at: "desc" };
-
-      // Handle sortBy from BaseSearchQueryDto
-      if (sortBy && sortBy.length > 0) {
-        const firstSort = sortBy[0];
-        if (ORDER_MAP[firstSort.field]) {
-          orderBy = {
-            ...ORDER_MAP[firstSort.field],
-            [Object.keys(ORDER_MAP[firstSort.field])[0]]: firstSort.order?.toLowerCase() || "asc",
-          };
-        }
+      const orderByArray: Prisma.ticketsOrderByWithRelationInput[] = [];
+      for (const [field, direction] of Object.entries(sortOptions)) {
+        const mappedField = fieldMapping[field] ?? (field as keyof Prisma.ticketsOrderByWithRelationInput);
+        orderByArray.push({ [mappedField]: direction as Prisma.SortOrder } as Prisma.ticketsOrderByWithRelationInput);
       }
+
+      const orderBy = orderByArray.length > 0 ? orderByArray : [{ created_at: Prisma.SortOrder.desc }];
 
       const [tickets, total] = await this.prisma.$transaction([
         this.prisma.tickets.findMany({

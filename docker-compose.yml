@@ -88,6 +88,9 @@ services:
     image: gile-back:latest
     env_file:
       - ./.env
+    environment:
+      # Override gRPC endpoint to use Compose DNS service name (renamed service)
+      LOG_LEVEL: debug
     command: ["node", "dist/apps/logger/src/main.js"]
     ports:
       - "50056:50056"

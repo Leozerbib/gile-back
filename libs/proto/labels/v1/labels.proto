@@ -30,7 +30,7 @@ message SearchLabelsResponse {
 }
 
 message GetLabelByIdRequest {
-  string id = 1;
+  int32 id = 1;
   optional string userId = 2;
   string workspaceId = 3;
 }
@@ -51,14 +51,14 @@ message GetOverviewResponse {
 }
 
 message UpdateLabelRequest {
-  string id = 1;
+  int32 id = 1;
   UpdateLabelDto dto = 2;
   optional string updatedBy = 3;
   string workspaceId = 4;
 }
 
 message DeleteLabelRequest {
-  string id = 1;
+  int32 id = 1;
   optional string deletedBy = 2;
   string workspaceId = 3;
 }
@@ -86,10 +86,12 @@ message UpdateLabelDto {
 }
 
 message LabelDto {
-  string id = 1;
+  int32 id = 1;
   string name = 2;
   optional string description = 3;
   optional string color = 4;
+  string created_at = 5;
+  profile.v1.ProfileOverview created_by_user = 6;
 }
 
 // ============================================================================

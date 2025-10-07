@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package util;
 
-import "google/protobuf/struct.proto"; // for flexible filters
+import "google/protobuf/struct.proto"; // for flexible filters and google.protobuf.Value
 
 // Sort direction for query ordering
 enum SortOrder {
@@ -11,16 +11,63 @@ enum SortOrder {
   DESC = 2;
 }
 
+// Date granularity for grouping
+enum Granularity {
+  GRANULARITY_UNSPECIFIED = 0;
+  DAY = 1;
+  WEEK = 2;
+  MONTH = 3;
+  YEAR = 4;
+}
+
+// Value type used in filter rules
+enum FilterValueType {
+  FILTER_VALUE_TYPE_UNSPECIFIED = 0;
+  STRING = 1;
+  NUMBER = 2;
+  DATE = 3;
+  ENUM = 4;
+}
+
+// Operator used in filter rules
+enum FilterOperator {
+  FILTER_OPERATOR_UNSPECIFIED = 0;
+  EQ = 1;
+  NEQ = 2;
+  GT = 3;
+  GTE = 4;
+  LT = 5;
+  LTE = 6;
+  BETWEEN = 7;
+  IN = 8;
+  NOT_IN = 9;
+  CONTAINS = 10;
+  STARTS_WITH = 11;
+  ENDS_WITH = 12;
+  IS_NULL = 13;
+  NOT_NULL = 14;
+}
+
 // A single field sorting option
 message SortOption {
   string field = 1;     // field name to sort by
   SortOrder order = 2;  // direction
 }
 
-// Grouping option (with sub-field)
+// Grouping option
 message GroupByOption {
-  string field = 1;           // primary grouping field
-  string sub_field = 2; // sub-group field
+  string field = 1;                 // primary grouping field
+  Granularity fieldGranularity = 2; // date granularity (if applicable)
+}
+
+// Rule-based filter entry
+message FilterRule {
+  string field = 1;                 // field key to filter on
+  FilterValueType type = 2;         // value type
+  FilterOperator op = 3;            // operator
+  string value = 4;  // single value (if applicable)
+  repeated string values = 5; // list of values (if applicable)
+  bool case_insensitive = 6;        // case-insensitive for string operations
 }
 
 // Generic search query parameters (extends pagination options)
@@ -29,16 +76,16 @@ message SearchQuery {
   string search = 1;
 
   // Sorting options (order of entries matters)
-  repeated SortOption sort_by = 2;
+  SortOption sortBy = 2;
 
   // Grouping options
-  GroupByOption group_by = 3;
-  GroupByOption sub_group_by = 4;
+  GroupByOption groupBy = 3;
+  GroupByOption subGroupBy = 4;
 
-  // Arbitrary filter object (maps to Record<string, any>)
-  google.protobuf.Struct filters = 5;
+  // Rule-based filters (preferred for typed operations)
+  repeated FilterRule filters = 6;
 
   // Pagination options (offset/limit)
-  int32 skip = 6;
-  int32 take = 7;
+  int32 skip = 7;
+  int32 take = 8;
 }

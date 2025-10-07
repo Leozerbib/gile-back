@@ -243,9 +243,9 @@ export class TasksService {
 
     if (params?.filters) {
       const additionalFilters: Record<string, unknown> = {};
-      for (const [key, value] of Object.entries(params.filters as Record<string, unknown>)) {
-        const mappedKey = filterMapping[key] ?? key;
-        additionalFilters[mappedKey] = value;
+      for (const filter of params.filters) {
+        const mappedKey = filterMapping[filter.field] ?? filter.field;
+        additionalFilters[mappedKey] = filter.value;
       }
       where = { ...where, ...(additionalFilters as Prisma.tasksWhereInput) };
     }

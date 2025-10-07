@@ -1,12 +1,28 @@
 import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags, ApiExtraModels, getSchemaPath } from "@nestjs/swagger";
 import { ProjectsGatewayService } from "libs/shared/utils/src/client/project/projects.client";
 import { Auth, CurrentUser } from "../auth-gateway/auth.decorators";
 import type { AuthenticatedUser } from "@shared/types";
-import { CreateProjectDto, UpdateProjectDto, ProjectDto, ProjectsListDto, TeamOverview, BaseSearchQueryDto } from "@shared/types";
+import { plainToInstance } from "class-transformer";
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  ProjectDto,
+  ProjectsListDto,
+  TeamOverview,
+  BaseSearchQueryDto,
+  SortOrder,
+  FilterRule,
+  ProjectSortField,
+  ProjectGroupField,
+  ProjectSubGroupField,
+  GroupByOption,
+  Granularity,
+} from "@shared/types";
 import { normalizeObject, normalizeWithRequiredFields } from "@shared/utils";
 
 @ApiTags("Projects")
+@ApiExtraModels(FilterRule)
 @Controller("projects")
 export class ProjectsGatewayController {
   constructor(private readonly projects: ProjectsGatewayService) {}
@@ -19,8 +35,16 @@ export class ProjectsGatewayController {
   @ApiQuery({ name: "search", required: false, schema: { type: "string", nullable: true } })
   @ApiQuery({ name: "skip", required: false, schema: { type: "integer", minimum: 0, default: 0, nullable: true } })
   @ApiQuery({ name: "take", required: false, schema: { type: "integer", minimum: 1, default: 25, nullable: true } })
-  @ApiQuery({ name: "_sort", required: false, schema: { type: "string", example: "createdAt|updatedAt|name|status|priority|progress", nullable: true } })
-  @ApiQuery({ name: "_order", required: false, schema: { type: "string", example: "asc|desc", nullable: true } })
+  @ApiQuery({ name: "sort", required: false, schema: { type: "string", enum: Object.values(ProjectSortField), nullable: true } })
+  @ApiQuery({ name: "order", required: false, schema: { type: "string", enum: Object.values(SortOrder), nullable: true } })
+  @ApiQuery({ name: "groupBy", required: false, schema: { type: "string", enum: Object.values(ProjectGroupField), nullable: true } })
+  @ApiQuery({ name: "subGroupBy", required: false, schema: { type: "string", enum: Object.values(ProjectSubGroupField), nullable: true } })
+  @ApiQuery({ name: "dateGranularity", required: false, schema: { type: "string", enum: Object.values(Granularity), nullable: true } })
+  @ApiQuery({
+    name: "filter",
+    required: false,
+    type: [FilterRule],
+  })
   @ApiOkResponse({ type: ProjectsListDto })
   async list(
     @CurrentUser() user: AuthenticatedUser,
@@ -28,25 +52,60 @@ export class ProjectsGatewayController {
     @Query("search") search?: string,
     @Query("skip") skip?: string,
     @Query("take") take?: string,
-    @Query("_sort") sort?: string,
-    @Query("_order") order?: string,
+    @Query("sort") sort?: string,
+    @Query("order") order?: string,
+    @Query("groupBy") groupBy?: string,
+    @Query("subGroupBy") subGroupBy?: string,
+    @Query("dateGranularity") dateGranularity?: string,
+    @Query("filter") filter?: string | string[],
   ): Promise<ProjectsListDto> {
     if (!workspaceId) {
       throw new BadRequestException("workspace_id is required");
     }
+
     const isNullish = (v?: string) => v == null || v === "" || v.toLowerCase?.() === "null";
+    // Parse filter query param which may come as JSON string(s)
+    const parseFilterParam = (input?: string | string[]): FilterRule[] | undefined => {
+      if (input == null) return undefined;
+      const raw = Array.isArray(input) ? input : [input];
+      const rules: FilterRule[] = [];
+      for (const item of raw) {
+        if (!item) continue;
+        try {
+          const parsed = JSON.parse(item);
+          if (Array.isArray(parsed)) {
+            for (const r of parsed) {
+              rules.push(plainToInstance(FilterRule, r));
+            }
+          } else if (typeof parsed === "object") {
+            rules.push(plainToInstance(FilterRule, parsed));
+          }
+        } catch {
+          // Ignore invalid JSON; optionally could log
+        }
+      }
+      return rules.length > 0 ? rules : undefined;
+    };
+    const filterRules = parseFilterParam(filter);
+    // console.log("filterRules", filterRules);
+    const inSet = (v?: string, allowed?: readonly string[]) => (v && allowed?.includes(v) ? v : undefined);
+    const sortField = inSet(sort, Object.values(ProjectSortField));
+    const groupField = inSet(groupBy, Object.values(ProjectGroupField));
+    const subGroupField = inSet(subGroupBy, Object.values(ProjectSubGroupField));
+    const granularity = !isNullish(dateGranularity) ? String(dateGranularity) : "day";
     const params: BaseSearchQueryDto = {
       search: !isNullish(search) ? search : undefined,
       skip: !isNullish(skip) ? Number(skip) : undefined,
       take: !isNullish(take) ? Number(take) : undefined,
-      sortBy: !isNullish(sort)
-        ? [
-            {
-              field: String(sort),
-              order: order?.toUpperCase() === "ASC" || order?.toUpperCase() === "DESC" ? (order.toUpperCase() as "ASC" | "DESC") : ("DESC" as const),
-            },
-          ]
+      sortBy: sortField
+        ? {
+            field: String(sortField),
+            order: order?.toUpperCase() === "ASC" ? SortOrder.ASC : SortOrder.DESC,
+          }
         : undefined,
+      groupBy: groupField ? ({ field: String(groupField), fieldGranularity: granularity } as GroupByOption) : undefined,
+      subGroupBy: subGroupField ? ({ field: String(subGroupField), fieldGranularity: granularity } as GroupByOption) : undefined,
+      filters: filterRules,
     } as BaseSearchQueryDto;
 
     const result = await this.projects.search(user.user_id, workspaceId, params);

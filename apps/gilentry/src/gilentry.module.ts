@@ -24,6 +24,7 @@ import { EpicsGatewayController } from "./epics-gateway/epics-gateway.controller
 import { TasksGatewayController } from "./tasks-gateway/tasks-gateway.controller";
 import { EpicsGatewayModule } from "libs/shared/utils/src/client/epic/epic-gateway.module";
 import { TasksGatewayModule } from "libs/shared/utils/src/client/task/tasks-gateway.module";
+import { LabelsGatewayModule } from "libs/shared/utils/src/client/workspace/label-gateway.module";
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { TasksGatewayModule } from "libs/shared/utils/src/client/task/tasks-gate
     TeamsGatewayModule,
     EpicsGatewayModule,
     TasksGatewayModule,
+    LabelsGatewayModule,
   ],
   controllers: [
     AppController,
