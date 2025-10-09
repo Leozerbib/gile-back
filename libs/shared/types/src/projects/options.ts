@@ -5,8 +5,8 @@
 
 // Sortable fields for project listings
 export enum ProjectSortField {
-  CreatedAt = "createdAt",
-  UpdatedAt = "updatedAt",
+  CreatedAt = "created_at",
+  UpdatedAt = "updated_at",
   WorkspaceId = "workspace_id",
   ProjectManagerId = "project_manager_id",
   Name = "name",
@@ -15,13 +15,13 @@ export enum ProjectSortField {
   Progress = "progress",
   IsArchived = "is_archived",
   IsPublic = "is_public",
-  StartDate = "startDate",
-  EndDate = "endDate",
+  StartDate = "start_date",
+  EndDate = "end_date",
 }
 
 // Group-by fields for aggregations
 export enum ProjectGroupField {
-  CreatedAt = "createdAt",
+  CreatedAt = "created_at",
   WorkspaceId = "workspace_id",
   ProjectManagerId = "project_manager_id",
   Status = "status",
@@ -29,13 +29,13 @@ export enum ProjectGroupField {
   Progress = "progress",
   IsArchived = "is_archived",
   IsPublic = "is_public",
-  StartDate = "startDate",
-  EndDate = "endDate",
+  StartDate = "start_date",
+  EndDate = "end_date",
 }
 
 // Sub-group-by fields for nested aggregations
 export enum ProjectSubGroupField {
-  CreatedAt = "createdAt",
+  CreatedAt = "created_at",
   WorkspaceId = "workspace_id",
   ProjectManagerId = "project_manager_id",
   Status = "status",
@@ -43,14 +43,14 @@ export enum ProjectSubGroupField {
   Progress = "progress",
   IsArchived = "is_archived",
   IsPublic = "is_public",
-  StartDate = "startDate",
-  EndDate = "endDate",
+  StartDate = "start_date",
+  EndDate = "end_date",
 }
 
 // Filterable fields for project queries
 export enum ProjectFilterField {
-  CreatedAt = "createdAt",
-  UpdatedAt = "updatedAt",
+  CreatedAt = "created_at",
+  UpdatedAt = "updated_at",
   WorkspaceId = "workspace_id",
   ProjectManagerId = "project_manager_id",
   Name = "name",
@@ -59,6 +59,6 @@ export enum ProjectFilterField {
   Progress = "progress",
   IsArchived = "is_archived",
   IsPublic = "is_public",
-  StartDate = "startDate",
-  EndDate = "endDate",
+  StartDate = "start_date",
+  EndDate = "end_date",
 }

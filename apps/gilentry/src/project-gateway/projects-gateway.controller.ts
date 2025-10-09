@@ -182,6 +182,8 @@ export class ProjectsGatewayController {
     if (!workspaceId) {
       throw new BadRequestException("workspace_id is required");
     }
+
+    console.log("body", body);
     const result = await this.projects.create(user.user_id, workspaceId, body);
     return normalizeObject(result) as ProjectDto;
   }

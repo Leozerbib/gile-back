@@ -23,29 +23,29 @@ enum Granularity {
 // Value type used in filter rules
 enum FilterValueType {
   FILTER_VALUE_TYPE_UNSPECIFIED = 0;
-  STRING = 1;
-  NUMBER = 2;
-  DATE = 3;
-  ENUM = 4;
+  string = 1;
+  number = 2;
+  date = 3;
+  enum = 4;
 }
 
 // Operator used in filter rules
 enum FilterOperator {
   FILTER_OPERATOR_UNSPECIFIED = 0;
-  EQ = 1;
-  NEQ = 2;
-  GT = 3;
-  GTE = 4;
-  LT = 5;
-  LTE = 6;
-  BETWEEN = 7;
-  IN = 8;
-  NOT_IN = 9;
-  CONTAINS = 10;
-  STARTS_WITH = 11;
-  ENDS_WITH = 12;
-  IS_NULL = 13;
-  NOT_NULL = 14;
+  eq = 1;
+  neq = 2;
+  gt = 3;
+  gte = 4;
+  lt = 5;
+  lte = 6;
+  between = 7;
+  in = 8;
+  not_in = 9;
+  contains = 10;
+  starts_with = 11;
+  ends_with = 12;
+  is_null = 13;
+  not_null = 14;
 }
 
 // A single field sorting option

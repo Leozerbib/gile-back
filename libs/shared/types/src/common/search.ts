@@ -268,6 +268,39 @@ export class SearchQueryBuilder {
   }
 
   /**
+   * Parse une valeur selon son type
+   */
+  private static parseValue(value: string | number | null | undefined, type: FilterValueType): any {
+    if (value === null || value === undefined) {
+      return value;
+    }
+
+    switch (type) {
+      case FilterValueType.NUMBER:
+        return typeof value === 'number' ? value : Number(value);
+      case FilterValueType.DATE:
+        if (typeof value === 'string') {
+          const date = new Date(value);
+          return isNaN(date.getTime()) ? value : date;
+        }
+        return value;
+      case FilterValueType.STRING:
+      case FilterValueType.ENUM:
+      default:
+        return value;
+    }
+  }
+
+  /**
+   * Parse un tableau de valeurs selon leur type
+   */
+  private static parseValues(values: Array<string | number> | undefined, type: FilterValueType): Array<any> | undefined {
+    if (!values) return values;
+    
+    return values.map(value => this.parseValue(value, type));
+  }
+
+  /**
    * Convertit un tableau de FilterRule en conditions compatibles Prisma
    */
   static buildWhereFromFilterRules(rules: FilterRule[]): Record<string, any> {
@@ -288,44 +321,49 @@ export class SearchQueryBuilder {
     for (const rule of rules) {
       const f = rule.field;
       const ci = rule.caseInsensitive ? { mode: "insensitive" as const } : {};
+      
+      // Parse les valeurs selon leur type
+      const parsedValue = this.parseValue(rule.value, rule.type);
+      const parsedValues = this.parseValues(rule.values, rule.type);
+      
       switch (rule.op) {
         case FilterOperator.EQ:
-          mergeCond({ [f]: rule.value });
+          mergeCond({ [f]: parsedValue });
           break;
         case FilterOperator.NEQ:
-          mergeCond({ NOT: { [f]: rule.value } });
+          mergeCond({ NOT: { [f]: parsedValue } });
           break;
         case FilterOperator.GT:
-          mergeCond({ [f]: { gt: rule.value } });
+          mergeCond({ [f]: { gt: parsedValue } });
           break;
         case FilterOperator.GTE:
-          mergeCond({ [f]: { gte: rule.value } });
+          mergeCond({ [f]: { gte: parsedValue } });
           break;
         case FilterOperator.LT:
-          mergeCond({ [f]: { lt: rule.value } });
+          mergeCond({ [f]: { lt: parsedValue } });
           break;
         case FilterOperator.LTE:
-          mergeCond({ [f]: { lte: rule.value } });
+          mergeCond({ [f]: { lte: parsedValue } });
           break;
         case FilterOperator.BETWEEN:
-          if (rule.values && rule.values.length >= 2) {
-            mergeCond({ [f]: { gte: rule.values[0], lte: rule.values[1] } });
+          if (parsedValues && parsedValues.length >= 2) {
+            mergeCond({ [f]: { gte: parsedValues[0], lte: parsedValues[1] } });
           }
           break;
         case FilterOperator.IN:
-          mergeCond({ [f]: { in: rule.values ?? [] } });
+          mergeCond({ [f]: { in: parsedValues ?? [] } });
           break;
         case FilterOperator.NOT_IN:
-          mergeCond({ [f]: { notIn: rule.values ?? [] } });
+          mergeCond({ [f]: { notIn: parsedValues ?? [] } });
           break;
         case FilterOperator.CONTAINS:
-          mergeCond({ [f]: { contains: rule.value, ...ci } });
+          mergeCond({ [f]: { contains: parsedValue, ...ci } });
           break;
         case FilterOperator.STARTS_WITH:
-          mergeCond({ [f]: { startsWith: rule.value, ...ci } });
+          mergeCond({ [f]: { startsWith: parsedValue, ...ci } });
           break;
         case FilterOperator.ENDS_WITH:
-          mergeCond({ [f]: { endsWith: rule.value, ...ci } });
+          mergeCond({ [f]: { endsWith: parsedValue, ...ci } });
           break;
         case FilterOperator.IS_NULL:
           mergeCond({ [f]: null });

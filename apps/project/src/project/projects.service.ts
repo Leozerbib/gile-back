@@ -65,7 +65,7 @@ export class ProjectsService {
    */
   async create(userId: string, workspaceId: string, dto: CreateProjectDto): Promise<ProjectDto> {
     await this.loggerClient.log({
-      level: "debug",
+      level: "info",
       service: "project",
       func: "projects.create",
       message: `Creating project with name: ${dto.name}`,
@@ -215,10 +215,17 @@ export class ProjectsService {
             avatar_url: undefined,
             workspace_id: workspaceId,
           };
-          const created_team = await this.teamGatewayService.create(userId, workspaceId, createTeam);
+
+          const created_team = await this.teamService.create(userId, workspaceId, createTeam);
           if (!created_team) {
             throw new Error("Failed to create team for project");
           }
+          await this.loggerClient.log({
+            service: "project",
+            level: "info",
+            func: "projects.create",
+            message: `Team created successfully for project ${createdProject.name}`,
+          });
 
           await tx.project_teams.create({
             data: {
@@ -309,9 +316,24 @@ export class ProjectsService {
     const searchConditions = SearchQueryBuilder.buildSearchConditions(params?.search, ["name", "description"]);
     where = { ...where, ...searchConditions };
 
+    await this.loggerClient.log({
+      level: "info",
+      service: "project",
+      func: "projects.search",
+      message: `Searching projects with filters: ${JSON.stringify(params?.filters)}`,
+      data: { where },
+    });
     if (params?.filters) {
       where = SearchQueryBuilder.applyFilters(where, params.filters);
     }
+
+    await this.loggerClient.log({
+      level: "info",
+      service: "project",
+      func: "projects.search",
+      message: `Applying filters: ${JSON.stringify(params?.filters)}`,
+      data: { where },
+    });
 
     // Build orderBy from sort options, mapping fields to DB columns
     const sortOptions = SearchQueryBuilder.buildSortOptions(params?.sortBy);
