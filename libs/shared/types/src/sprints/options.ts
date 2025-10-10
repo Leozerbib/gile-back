@@ -5,43 +5,56 @@
 
 // Sortable fields for sprint listings
 export enum SprintSortField {
-  CreatedAt = "createdAt",
-  UpdatedAt = "updatedAt",
+  CreatedAt = "created_at",
+  UpdatedAt = "updated_at",
   ProjectId = "project_id",
   Name = "name",
   Status = "status",
-  StartDate = "startDate",
-  EndDate = "endDate",
+  StartDate = "start_date",
+  EndDate = "end_date",
+  ActualStartDate = "actual_start_date",
+  ActualEndDate = "actual_end_date",
   Version = "version",
+  Velocity = "velocity",
+  Capacity = "capacity",
 }
 
 // Group-by fields for aggregations
 export enum SprintGroupField {
-  CreatedAt = "createdAt",
+  CreatedAt = "created_at",
   ProjectId = "project_id",
   Status = "status",
-  StartDate = "startDate",
-  EndDate = "endDate",
+  StartDate = "start_date",
+  EndDate = "end_date",
+  ActualStartDate = "actual_start_date",
+  ActualEndDate = "actual_end_date",
   Version = "version",
 }
 
 // Sub-group-by fields for nested aggregations
 export enum SprintSubGroupField {
-  CreatedAt = "createdAt",
+  CreatedAt = "created_at",
   ProjectId = "project_id",
   Status = "status",
-  StartDate = "startDate",
-  EndDate = "endDate",
+  StartDate = "start_date",
+  EndDate = "end_date",
+  ActualStartDate = "actual_start_date",
+  ActualEndDate = "actual_end_date",
   Version = "version",
 }
 
 // Filterable fields for sprint queries
 export enum SprintFilterField {
-  CreatedAt = "createdAt",
-  UpdatedAt = "updatedAt",
+  CreatedAt = "created_at",
+  UpdatedAt = "updated_at",
   ProjectId = "project_id",
+  Name = "name",
   Status = "status",
-  StartDate = "startDate",
-  EndDate = "endDate",
+  StartDate = "start_date",
+  EndDate = "end_date",
+  ActualStartDate = "actual_start_date",
+  ActualEndDate = "actual_end_date",
   Version = "version",
+  Velocity = "velocity",
+  Capacity = "capacity",
 }

@@ -248,37 +248,55 @@ export class TicketsService {
    * Recherche des tickets avec pagination et filtres
    *
    * @param userId ID de l'utilisateur effectuant la recherche
-   * @param query Paramètres de recherche avec pagination et filtres
+   * @param projectId ID du projet
+   * @param params Paramètres de recherche avec pagination et filtres
    * @returns Liste paginée des tickets
    * @throws UnauthorizedException Si l'utilisateur n'a pas les droits
    */
-  async search(userId: string, query: BaseSearchQueryDto): Promise<TicketsListDto> {
+  async search(userId: string, projectId: number, params?: BaseSearchQueryDto): Promise<TicketsListDto> {
+    const skip = params?.skip ?? 0;
+    const take = params?.take ?? 50;
+
     await this.loggerClient.log({
-      level: "debug",
+      level: "info",
       service: "project",
       func: "tickets.search",
-      message: "Searching tickets with filters",
-      data: { userId, query },
+      message: `Searching tickets with filters: ${JSON.stringify(params?.filters)}`,
+      data: { userId, projectId, params },
     });
 
-    const { search, sortBy, filters } = query;
-    const skip = query.skip || 0;
-    const take = query.take || 25;
-
     try {
-      let where: Prisma.ticketsWhereInput = {};
+      // Base where clause: tickets for the project
+      let where: Prisma.ticketsWhereInput = {
+        project_id: projectId,
+      };
 
-      // Text search across title and description
-      const searchConditions = SearchQueryBuilder.buildSearchConditions(search, ["title", "description"]);
+      // Apply text search across selected fields
+      const searchConditions = SearchQueryBuilder.buildSearchConditions(params?.search, ["title", "description"]);
       where = { ...where, ...searchConditions };
 
-      // Handle filters (supports FilterRule[] or legacy object)
-      if (filters) {
-        where = SearchQueryBuilder.applyFilters(where, filters);
+      await this.loggerClient.log({
+        level: "info",
+        service: "project",
+        func: "tickets.search",
+        message: `Searching tickets with filters: ${JSON.stringify(params?.filters)}`,
+        data: { where },
+      });
+
+      if (params?.filters) {
+        where = SearchQueryBuilder.applyFilters(where, params.filters);
       }
 
-      // Sorting configuration using shared builder
-      const sortOptions = SearchQueryBuilder.buildSortOptions(sortBy);
+      await this.loggerClient.log({
+        level: "info",
+        service: "project",
+        func: "tickets.search",
+        message: `Applying filters: ${JSON.stringify(params?.filters)}`,
+        data: { where },
+      });
+
+      // Build orderBy from sort options, mapping fields to DB columns
+      const sortOptions = SearchQueryBuilder.buildSortOptions(params?.sortBy);
       const fieldMapping: Record<string, keyof Prisma.ticketsOrderByWithRelationInput> = {
         createdAt: "created_at",
         updatedAt: "updated_at",
@@ -286,11 +304,14 @@ export class TicketsService {
         status: "status",
         priority: "priority",
         category: "category",
-        story_points: "story_points",
-        estimated_hours: "estimated_hours",
-        actual_hours: "actual_hours",
+        storyPoints: "story_points",
+        estimatedHours: "estimated_hours",
+        actualHours: "actual_hours",
         dueDate: "due_date",
         completedAt: "completed_at",
+        ticketNumber: "ticket_number",
+        sprintId: "sprint_id",
+        assignedTo: "assigned_to",
       };
 
       const orderByArray: Prisma.ticketsOrderByWithRelationInput[] = [];
@@ -299,9 +320,10 @@ export class TicketsService {
         orderByArray.push({ [mappedField]: direction as Prisma.SortOrder } as Prisma.ticketsOrderByWithRelationInput);
       }
 
+      // Default sort
       const orderBy = orderByArray.length > 0 ? orderByArray : [{ created_at: Prisma.SortOrder.desc }];
 
-      const [tickets, total] = await this.prisma.$transaction([
+      const [tickets, total] = await Promise.all([
         this.prisma.tickets.findMany({
           where,
           skip,
@@ -321,6 +343,14 @@ export class TicketsService {
         this.prisma.tickets.count({ where }),
       ]);
 
+      await this.loggerClient.log({
+        level: "info",
+        service: "project",
+        func: "tickets.search",
+        message: `Successfully fetched ${tickets.length} tickets out of ${total}`,
+        data: { count: tickets.length, total, skip, take },
+      });
+
       const items = tickets.map(ticket => {
         const transformedTicket = {
           ...ticket,
@@ -330,15 +360,7 @@ export class TicketsService {
           task_ids: ticket.task_tickets.map(tt => tt.task_id),
           dependency_ticket_ids: ticket.ticket_dependencies_ticket_dependencies_ticket_idTotickets.map(td => td.depends_on_ticket_id),
         };
-        return plainToInstance(TicketDto, transformedTicket);
-      });
-
-      await this.loggerClient.log({
-        level: "info",
-        service: "project",
-        func: "tickets.search",
-        message: `Search completed successfully`,
-        data: { count: items.length, total, userId },
+        return plainToInstance(TicketDto, transformedTicket, { excludeExtraneousValues: true });
       });
 
       return BasePaginationDto.create(items, total, skip, take, TicketsListDto);
@@ -351,11 +373,9 @@ export class TicketsService {
           level: "error",
           service: "project",
           func: "tickets.search",
-          message: "Error searching tickets",
-          data: { error: error.message, query, userId },
+          message: `Failed to search tickets: ${error.message}`,
+          data: { error: error.message, params },
         });
-
-        throw new RpcException({ code: status.INTERNAL, message: "Unable to search tickets: " + error.message });
       }
       throw error;
     }

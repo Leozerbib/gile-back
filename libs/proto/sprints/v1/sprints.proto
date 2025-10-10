@@ -17,8 +17,9 @@ message CreateSprintRequest {
 }
 
 message SearchSprintsRequest {
-  util.SearchQuery params = 1;
-  optional string userId = 2;
+  string user_id = 1;
+  int32 project_id = 2;
+  optional util.SearchQuery params = 3;
 }
 
 message SearchSprintsResponse {
@@ -105,18 +106,18 @@ message CreateSprintDto {
 }
 
 message UpdateSprintDto {
-  optional string name = 1;
-  optional string description = 2;
-  optional string start_date = 3;
-  optional string end_date = 4;
-  optional string actual_start_date = 5;
-  optional string actual_end_date = 6;
-  optional double version = 7;
-  optional string status = 8;
-  optional int32 velocity = 9;
-  optional int32 capacity = 10;
-  optional string review_notes = 11;
-  optional string retrospective_notes = 12;
+  string name = 1;
+  string description = 2;
+  string start_date = 3;
+  string end_date = 4;
+  string actual_start_date = 5;
+  string actual_end_date = 6;
+  double version = 7;
+  string status = 8;
+  int32 velocity = 9;
+  int32 capacity = 10;
+  string review_notes = 11;
+  string retrospective_notes = 12;
 }
 
 message Sprint {
@@ -126,11 +127,11 @@ message Sprint {
   optional string description = 4;
   int32 project_id = 5;
   string start_date = 6;
-  optional string end_date = 7;
-  optional string actual_start_date = 8;
-  optional string actual_end_date = 9;
-  optional int32 velocity = 10;
-  optional int32 capacity = 11;
+  string end_date = 7;
+  string actual_start_date = 8;
+  string actual_end_date = 9;
+  int32 velocity = 10;
+  int32 capacity = 11;
   double version = 12;
   string status = 13;
   optional string review_notes = 14;

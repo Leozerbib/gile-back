@@ -104,37 +104,53 @@ export class SprintsService {
     }
   }
 
-  async search(params: BaseSearchQueryDto = {} as BaseSearchQueryDto): Promise<SprintsListDto> {
+  async search(userId: string, projectId: number, params?: BaseSearchQueryDto): Promise<SprintsListDto> {
+    const skip = params?.skip ?? 0;
+    const take = params?.take ?? 50;
+
     await this.logger.log({
       level: "info",
       service: "project",
       func: "sprints.search",
-      message: `Fetching sprints with filters`,
-      data: params,
+      message: `Searching sprints with filters: ${JSON.stringify(params?.filters)}`,
+      data: { userId, projectId, params },
     });
 
     try {
-      // Extract pagination parameters
-      const { search, sortBy, filters } = params;
-      const skip = params.skip ?? 0;
-      const take = params.take ?? 50;
+      // Validate project exists and user has access
+      await this.projectsService.getById(projectId, userId);
 
-      // Build base where clause
-      let where: Prisma.sprintsWhereInput = {};
+      // Base where clause: sprints for the project
+      let where: Prisma.sprintsWhereInput = {
+        project_id: projectId,
+      };
 
-      // Apply search term if provided
-      if (search?.trim()) {
-        const searchConditions = SearchQueryBuilder.buildSearchConditions(search, ["name", "description"]);
-        where = { ...where, ...searchConditions };
+      // Apply text search across selected fields
+      const searchConditions = SearchQueryBuilder.buildSearchConditions(params?.search, ["name", "description"]);
+      where = { ...where, ...searchConditions };
+
+      await this.logger.log({
+        level: "info",
+        service: "project",
+        func: "sprints.search",
+        message: `Searching sprints with filters: ${JSON.stringify(params?.filters)}`,
+        data: { where },
+      });
+
+      if (params?.filters) {
+        where = SearchQueryBuilder.applyFilters(where, params.filters);
       }
 
-      // Apply filters from BaseSearchQueryDto (supports rule-array or legacy object)
-      if (filters) {
-        where = SearchQueryBuilder.applyFilters(where, filters);
-      }
+      await this.logger.log({
+        level: "info",
+        service: "project",
+        func: "sprints.search",
+        message: `Applying filters: ${JSON.stringify(params?.filters)}`,
+        data: { where },
+      });
 
       // Build orderBy from sort options, mapping fields to DB columns
-      const sortOptions = SearchQueryBuilder.buildSortOptions(sortBy);
+      const sortOptions = SearchQueryBuilder.buildSortOptions(params?.sortBy);
       const fieldMapping: Record<string, keyof Prisma.sprintsOrderByWithRelationInput> = {
         createdAt: "created_at",
         updatedAt: "updated_at",
@@ -142,60 +158,61 @@ export class SprintsService {
         status: "status",
         startDate: "start_date",
         endDate: "end_date",
+        actualStartDate: "actual_start_date",
+        actualEndDate: "actual_end_date",
         version: "version",
+        velocity: "velocity",
+        capacity: "capacity",
       };
+
       const orderByArray: Prisma.sprintsOrderByWithRelationInput[] = [];
       for (const [field, direction] of Object.entries(sortOptions)) {
-        const mapped = fieldMapping[field] ?? (field as keyof Prisma.sprintsOrderByWithRelationInput);
-        orderByArray.push({ [mapped]: direction as Prisma.SortOrder } as Prisma.sprintsOrderByWithRelationInput);
+        const mappedField = fieldMapping[field] ?? (field as keyof Prisma.sprintsOrderByWithRelationInput);
+        orderByArray.push({ [mappedField]: direction as Prisma.SortOrder } as Prisma.sprintsOrderByWithRelationInput);
       }
+
+      // Default sort
       const orderBy = orderByArray.length > 0 ? orderByArray : [{ created_at: Prisma.SortOrder.desc }];
 
-      // Execute queries
-      const [itemsRaw, total] = await Promise.all([
+      const [items, total] = await Promise.all([
         this.prisma.sprints.findMany({
           where,
           skip,
           take,
           orderBy,
           include: {
-            project: true,
-            created_by_user: true,
-            updated_by_user: true,
+            project: { select: { id: true, name: true, slug: true } },
+            created_by_user: { select: { user_id: true, username: true, avatar_url: true } },
+            updated_by_user: { select: { user_id: true, username: true, avatar_url: true } },
           },
         }),
         this.prisma.sprints.count({ where }),
       ]);
 
+      // Transform items to DTOs for consistent logging and response
+      const transformedItems = items.map(item => plainToInstance(SprintDto, item, { excludeExtraneousValues: true }));
+
       await this.logger.log({
         level: "info",
         service: "project",
         func: "sprints.search",
-        message: `Successfully fetched ${itemsRaw.length} sprints out of ${total}`,
-        data: { count: itemsRaw.length, total, skip, take },
+        message: `Successfully fetched ${items.length} sprints out of ${total}`,
+        data: { count: transformedItems, total, skip, take },
       });
 
-      // Transform to DTOs
-      const items = itemsRaw.map(item => plainToInstance(SprintDto, item));
-
-      // Return search result with pagination metadata
-      return BasePaginationDto.create(items, total, skip, take, SprintsListDto);
+      return BasePaginationDto.create(transformedItems, total, skip, take, SprintsListDto);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      if (error instanceof Error) {
         await this.logger.log({
           level: "error",
           service: "project",
           func: "sprints.search",
-          message: `Error fetching sprints: ${error?.message}`,
-          data: { params, stack: error?.stack, code: error?.code },
+          message: `Failed to search sprints: ${error.message}`,
+          data: { error: error.message, params },
         });
-
-        switch (error?.code) {
-          case "P2003":
-            throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid project ID provided." });
-          default:
-            throw new RpcException({ code: status.INTERNAL, message: "An error occurred while fetching sprints. Please try again." });
-        }
       }
       throw error;
     }

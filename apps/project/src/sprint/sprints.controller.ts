@@ -35,7 +35,7 @@ export class SprintsController {
   }
 
   @GrpcMethod("SprintsService", "Search")
-  async search(data: { params?: BaseSearchQueryDto; userId?: string }): Promise<SprintsListDto> {
+  async search(data: { user_id: string; project_id: number; params?: BaseSearchQueryDto }): Promise<SprintsListDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -44,7 +44,7 @@ export class SprintsController {
       data,
     });
 
-    const list = await this.sprintsService.search(data.params ?? {});
+    const list = await this.sprintsService.search(data.user_id, data.project_id, data.params);
 
     await this.logger.log({
       level: "info",

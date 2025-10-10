@@ -36,7 +36,7 @@ export class TicketsController {
   }
 
   @GrpcMethod("Tickets", "Search")
-  async search(data: { user_id: string; params?: BaseSearchQueryDto }): Promise<TicketsListDto> {
+  async search(data: { user_id: string; project_id: number; params?: BaseSearchQueryDto }): Promise<TicketsListDto> {
     await this.logger.log({
       level: "info",
       service: "project",
@@ -45,7 +45,7 @@ export class TicketsController {
       data,
     });
 
-    const list = await this.ticketsService.search(data.user_id, data.params ?? {});
+    const list = await this.ticketsService.search(data.user_id, data.project_id, data.params);
 
     await this.logger.log({
       level: "info",

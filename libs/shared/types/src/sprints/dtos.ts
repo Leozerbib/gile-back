@@ -450,7 +450,7 @@ export class SprintDto extends SprintOverview {
   @Expose()
   @IsOptional()
   @IsDateString({}, { message: "La date de début réelle doit être au format ISO 8601 (YYYY-MM-DD)" })
-  actual_start_date?: string;
+  actual_start_date: string | null;
 
   @ApiPropertyOptional({
     description: "Date de fin réelle du sprint",
@@ -462,7 +462,7 @@ export class SprintDto extends SprintOverview {
   @Expose()
   @IsOptional()
   @IsDateString({}, { message: "La date de fin réelle doit être au format ISO 8601 (YYYY-MM-DD)" })
-  actual_end_date?: string;
+  actual_end_date: string | null;
 
   @ApiPropertyOptional({
     description: "Vélocité du sprint (points par sprint)",

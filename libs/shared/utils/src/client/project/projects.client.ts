@@ -28,7 +28,7 @@ export class ProjectsGatewayService implements OnModuleInit {
   }
 
   async search(user_id: string, workspace_id: string, params?: BaseSearchQueryDto): Promise<ProjectsListDto> {
-    console.log("params", params);
+    console.log("params", params); 
     return await firstValueFrom(this.svc.Search({ user_id, workspace_id, params }));
   }
 

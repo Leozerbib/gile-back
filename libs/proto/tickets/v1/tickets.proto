@@ -20,7 +20,8 @@ message CreateTicketRequest {
 
 message SearchTicketsRequest {
   string user_id = 1;
-  util.SearchQuery params = 2;
+  int32 project_id = 2;
+  optional util.SearchQuery params = 3;
 }
 
 message SearchTicketsResponse {

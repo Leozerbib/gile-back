@@ -13,7 +13,7 @@ import { normalizeObject } from "@shared/utils";
  * Handles HTTP requests and delegates to gRPC gateway service
  */
 @ApiTags("Tasks")
-@Controller("tasks")
+@Controller("project/:projectId/tasks")
 export class TasksGatewayController {
   constructor(private readonly tasks: TasksGatewayService) {}
 
@@ -62,7 +62,7 @@ export class TasksGatewayController {
   @ApiOkResponse({ type: TaskListDto })
   async list(
     @CurrentUser() user: AuthenticatedUser,
-    @Param("project_id") projectId: number,
+    @Param("projectId") projectId: string,
     @Query("epic_id") epicId: string,
     @Query("search") search?: string,
     @Query("skip") skip?: string,
@@ -91,7 +91,7 @@ export class TasksGatewayController {
         : undefined,
     } as BaseSearchQueryDto;
 
-    const result = await this.tasks.search(projectId, user.user_id, epicIdNum, params);
+    const result = await this.tasks.search(Number(projectId), user.user_id, epicIdNum, params);
     return normalizeObject(result) as TaskListDto;
   }
 
@@ -126,7 +126,7 @@ export class TasksGatewayController {
   @ApiOkResponse({ type: TaskListDto })
   async overview(
     @CurrentUser() user: AuthenticatedUser,
-    @Param("project_id") projectId: number,
+    @Param("projectId") projectId: string,
     @Query("epic_id") epicId: string,
     @Query("search") search?: string,
     @Query("skip") skip?: string,
@@ -146,7 +146,7 @@ export class TasksGatewayController {
       take: !Number.isNaN(t) ? t : 10,
     } as BaseSearchQueryDto;
 
-    const res = await this.tasks.getOverview(projectId, user.user_id, epicIdNum, params);
+    const res = await this.tasks.getOverview(Number(projectId), user.user_id, epicIdNum, params);
     return res;
   }
 
@@ -159,13 +159,13 @@ export class TasksGatewayController {
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get a task by ID" })
   @ApiOkResponse({ type: TaskDto })
-  async get(@CurrentUser() user: AuthenticatedUser, @Param("project_id") projectId: number, @Param("id") id: string): Promise<TaskDto> {
+  async get(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string): Promise<TaskDto> {
     const taskId = Number(id);
     if (Number.isNaN(taskId)) {
       throw new BadRequestException(`Invalid id param: ${id}`);
     }
 
-    const result = await this.tasks.findById(projectId, user.user_id, taskId);
+    const result = await this.tasks.findById(Number(projectId), user.user_id, taskId);
     return normalizeObject(result) as TaskDto;
   }
 
@@ -185,13 +185,13 @@ export class TasksGatewayController {
   })
   @ApiBody({ type: CreateTaskDto })
   @ApiOkResponse({ type: TaskDto })
-  async create(@CurrentUser() user: AuthenticatedUser, @Param("project_id") projectId: number, @Query("epic_id") epicId: string, @Body() body: CreateTaskDto) {
+  async create(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Query("epic_id") epicId: string, @Body() body: CreateTaskDto) {
     const epicIdNum = Number(epicId);
     if (!epicId || Number.isNaN(epicIdNum)) {
       throw new BadRequestException("epic_id is required and must be a valid number");
     }
 
-    const result = await this.tasks.create(projectId, user.user_id, epicIdNum, body);
+    const result = await this.tasks.create(Number(projectId), user.user_id, epicIdNum, body);
     return normalizeObject(result) as TaskDto;
   }
 
@@ -205,13 +205,13 @@ export class TasksGatewayController {
   @ApiOperation({ summary: "Update a task by ID" })
   @ApiBody({ type: UpdateTaskDto })
   @ApiOkResponse({ type: TaskDto })
-  async update(@CurrentUser() user: AuthenticatedUser, @Param("project_id") projectId: number, @Param("id") id: string, @Body() body: UpdateTaskDto) {
+  async update(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string, @Body() body: UpdateTaskDto) {
     const taskId = Number(id);
     if (Number.isNaN(taskId)) {
       throw new BadRequestException(`Invalid id param: ${id}`);
     }
 
-    const result = await this.tasks.update(projectId, user.user_id, taskId, body);
+    const result = await this.tasks.update(Number(projectId), user.user_id, taskId, body);
     return normalizeObject(result) as TaskDto;
   }
 
@@ -224,12 +224,12 @@ export class TasksGatewayController {
   @ApiBearerAuth()
   @HttpCode(204)
   @ApiOperation({ summary: "Delete a task by ID" })
-  async remove(@CurrentUser() user: AuthenticatedUser, @Param("project_id") projectId: number, @Param("id") id: string) {
+  async remove(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string) {
     const taskId = Number(id);
     if (Number.isNaN(taskId)) {
       throw new BadRequestException(`Invalid id param: ${id}`);
     }
 
-    await this.tasks.remove(projectId, user.user_id, taskId);
+    await this.tasks.remove(Number(projectId), user.user_id, taskId);
   }
 }

@@ -5,8 +5,8 @@
 
 // Sortable fields for ticket listings
 export enum TicketSortField {
-  CreatedAt = "createdAt",
-  UpdatedAt = "updatedAt",
+  CreatedAt = "created_at",
+  UpdatedAt = "updated_at",
   SprintId = "sprint_id",
   ProjectId = "project_id",
   AssignedTo = "assigned_to",
@@ -18,40 +18,40 @@ export enum TicketSortField {
   StoryPoints = "story_points",
   EstimatedHours = "estimated_hours",
   ActualHours = "actual_hours",
-  DueDate = "dueDate",
-  CompletedAt = "completedAt",
+  DueDate = "due_date",
+  CompletedAt = "completed_at",
 }
 
 // Group-by fields for aggregations
 export enum TicketGroupField {
-  CreatedAt = "createdAt",
+  CreatedAt = "created_at",
   SprintId = "sprint_id",
   ProjectId = "project_id",
   AssignedTo = "assigned_to",
   Status = "status",
   Priority = "priority",
   Category = "category",
-  DueDate = "dueDate",
-  CompletedAt = "completedAt",
+  DueDate = "due_date",
+  CompletedAt = "completed_at",
 }
 
 // Sub-group-by fields for nested aggregations
 export enum TicketSubGroupField {
-  CreatedAt = "createdAt",
+  CreatedAt = "created_at",
   SprintId = "sprint_id",
   ProjectId = "project_id",
   AssignedTo = "assigned_to",
   Status = "status",
   Priority = "priority",
   Category = "category",
-  DueDate = "dueDate",
-  CompletedAt = "completedAt",
+  DueDate = "due_date",
+  CompletedAt = "completed_at",
 }
 
 // Filterable fields for ticket queries
 export enum TicketFilterField {
-  CreatedAt = "createdAt",
-  UpdatedAt = "updatedAt",
+  CreatedAt = "created_at",
+  UpdatedAt = "updated_at",
   SprintId = "sprint_id",
   ProjectId = "project_id",
   AssignedTo = "assigned_to",
@@ -63,6 +63,6 @@ export enum TicketFilterField {
   StoryPoints = "story_points",
   EstimatedHours = "estimated_hours",
   ActualHours = "actual_hours",
-  DueDate = "dueDate",
-  CompletedAt = "completedAt",
+  DueDate = "due_date",
+  CompletedAt = "completed_at",
 }

@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from "@nestjs/swagger";
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from "@nestjs/common";
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags, ApiExtraModels } from "@nestjs/swagger";
 import { TicketsGatewayService } from "libs/shared/utils/src/client/ticket/tickets.client";
 import { Auth, CurrentUser } from "../auth-gateway/auth.decorators";
+import { plainToInstance } from "class-transformer";
 import {
   CreateTicketDto,
   UpdateTicketDto,
@@ -10,8 +11,6 @@ import {
   BaseSearchQueryDto,
   SortOrder,
   FilterRule,
-  FilterOperator,
-  FilterValueType,
   TicketSortField,
   TicketGroupField,
   TicketSubGroupField,
@@ -22,8 +21,9 @@ import type { AuthenticatedUser } from "@shared/types";
 import { normalizeObject } from "@shared/utils";
 
 @ApiTags("Tickets")
+@ApiExtraModels(FilterRule)
 @ApiBearerAuth()
-@Controller("tickets")
+@Controller("project/:projectId/tickets")
 export class TicketsGatewayController {
   constructor(private readonly tickets: TicketsGatewayService) {}
 
@@ -33,7 +33,7 @@ export class TicketsGatewayController {
   @ApiOperation({ summary: "Create a new ticket" })
   @ApiBody({ type: CreateTicketDto })
   @ApiOkResponse({ type: TicketDto })
-  async create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateTicketDto): Promise<TicketDto> {
+  async create(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Body() body: CreateTicketDto): Promise<TicketDto> {
     const ticket = await this.tickets.create(user.user_id, body);
     return normalizeObject(ticket) as TicketDto;
   }
@@ -41,123 +41,114 @@ export class TicketsGatewayController {
   @Get()
   @Auth()
   @ApiOperation({ summary: "Get all tickets with filters" })
-  @ApiQuery({ name: "project_id", required: false, schema: { type: "integer", minimum: 1, nullable: true } })
-  @ApiQuery({
-    name: "filter",
-    required: false,
-    schema: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          field: { type: "string" },
-          type: { type: "string", enum: Object.values(FilterValueType) },
-          op: { type: "string", enum: Object.values(FilterOperator) },
-          values: { type: "array", items: { type: "string" } },
-        },
-      },
-      nullable: true,
-      examples: {
-        rules: {
-          summary: "Rule-based filters",
-          value: '[{"field":"status","type":"enum","op":"in","values":["TODO","ACTIVE"]},{"field":"createdAt","type":"date","op":"between","values":["2025-01-01","2025-12-31"]}]',
-        },
-        legacy: {
-          summary: "Legacy object filters",
-          value: '{"status_in":["TODO","ACTIVE"],"createdAt_gte":"2025-01-01"}',
-        },
-      },
-    },
-  })
+  @ApiQuery({ name: "search", required: false, schema: { type: "string", nullable: true } })
+  @ApiQuery({ name: "skip", required: false, schema: { type: "integer", minimum: 0, default: 0, nullable: true } })
+  @ApiQuery({ name: "take", required: false, schema: { type: "integer", minimum: 1, default: 50, nullable: true } })
   @ApiQuery({
     name: "sort",
     required: false,
     schema: { type: "string", enum: Object.values(TicketSortField), nullable: true },
   })
+  @ApiQuery({ name: "order", required: false, schema: { type: "string", nullable: true, enum: Object.values(SortOrder) } })
   @ApiQuery({ name: "groupBy", required: false, schema: { type: "string", enum: Object.values(TicketGroupField), nullable: true } })
   @ApiQuery({ name: "subGroupBy", required: false, schema: { type: "string", enum: Object.values(TicketSubGroupField), nullable: true } })
   @ApiQuery({ name: "dateGranularity", required: false, schema: { type: "string", enum: Object.values(Granularity), nullable: true } })
-  @ApiQuery({ name: "order", required: false, schema: { type: "string", nullable: true, enum: Object.values(SortOrder) } })
-  @ApiQuery({ name: "skip", required: false, schema: { type: "integer", minimum: 0, default: 0, nullable: true } })
-  @ApiQuery({ name: "take", required: false, schema: { type: "integer", minimum: 1, default: 50, nullable: true } })
-  @ApiQuery({ name: "search", required: false, schema: { type: "string", nullable: true } })
+  @ApiQuery({
+    name: "filter",
+    required: false,
+    type: [FilterRule],
+  })
   @ApiOkResponse({ type: TicketsListDto })
   async list(
     @CurrentUser() user: AuthenticatedUser,
-    @Query("project_id") projectId?: string,
-    @Query("sort") sort?: string,
-    @Query("order") order?: string,
+    @Param("projectId") projectId: string,
+    @Query("search") search?: string,
     @Query("skip") skip?: string,
     @Query("take") take?: string,
-    @Query("search") search?: string,
+    @Query("sort") sort?: string,
+    @Query("order") order?: string,
     @Query("groupBy") groupBy?: string,
     @Query("subGroupBy") subGroupBy?: string,
     @Query("dateGranularity") dateGranularity?: string,
-    @Body("filter") filter?: FilterRule[],
+    @Query("filter") filter?: string | string[],
   ): Promise<TicketsListDto> {
+    if (!projectId) {
+      throw new BadRequestException("project_id is required");
+    }
+
     const isNullish = (v?: string) => v == null || v === "" || v.toLowerCase?.() === "null";
+    // Parse filter query param which may come as JSON string(s)
+    const parseFilterParam = (input?: string | string[]): FilterRule[] | undefined => {
+      if (input == null) return undefined;
+      const raw = Array.isArray(input) ? input : [input];
+      const rules: FilterRule[] = [];
+      for (const item of raw) {
+        if (!item) continue;
+        try {
+          const parsed = JSON.parse(item);
+          if (Array.isArray(parsed)) {
+            for (const r of parsed) {
+              rules.push(plainToInstance(FilterRule, r));
+            }
+          } else if (typeof parsed === "object") {
+            rules.push(plainToInstance(FilterRule, parsed));
+          }
+        } catch {
+          // Ignore invalid JSON; optionally could log
+        }
+      }
+      return rules.length > 0 ? rules : undefined;
+    };
+    const filterRules = parseFilterParam(filter);
+
     const inSet = (v?: string, allowed?: readonly string[]) => (v && allowed?.includes(v) ? v : undefined);
-    const granularity = !isNullish(dateGranularity) ? String(dateGranularity) : "day";
-    let filterObj: Record<string, unknown> | undefined;
-    const filterRules: FilterRule[] | undefined = filter;
-
-    const extraRules: FilterRule[] = [];
-    if (!isNullish(projectId)) extraRules.push({ field: "project_id", type: FilterValueType.NUMBER, op: FilterOperator.EQ, value: Number(projectId) });
-
     const sortField = inSet(sort, Object.values(TicketSortField));
     const groupField = inSet(groupBy, Object.values(TicketGroupField));
     const subGroupField = inSet(subGroupBy, Object.values(TicketSubGroupField));
+    const granularity = !isNullish(dateGranularity) ? String(dateGranularity) : "day";
+
     const params: BaseSearchQueryDto = {
       search: !isNullish(search) ? search : undefined,
       skip: !isNullish(skip) ? Number(skip) : undefined,
       take: !isNullish(take) ? Number(take) : undefined,
       sortBy: sortField
-        ? [
-            {
-              field: String(sortField),
-              order: order?.toUpperCase() === "ASC" ? SortOrder.ASC : SortOrder.DESC,
-            },
-          ]
+        ? {
+            field: String(sortField),
+            order: order?.toUpperCase() === "ASC" ? SortOrder.ASC : SortOrder.DESC,
+          }
         : undefined,
       groupBy: groupField ? ({ field: String(groupField), fieldGranularity: granularity } as GroupByOption) : undefined,
       subGroupBy: subGroupField ? ({ field: String(subGroupField), fieldGranularity: granularity } as GroupByOption) : undefined,
-      filters: filterRules
-        ? [...filterRules, ...extraRules]
-        : {
-            ...(filterObj ?? {}),
-            project_id: !isNullish(projectId) ? Number(projectId) : undefined,
-          },
+      filters: filterRules,
     } as BaseSearchQueryDto;
 
-    const res = await this.tickets.findAll(user.user_id, params);
-    return normalizeObject(res) as TicketsListDto;
+    const result = await this.tickets.search(user.user_id, Number(projectId), params);
+    return normalizeObject(result) as TicketsListDto;
   }
 
   @Get("options")
   @Auth()
   @ApiOperation({ summary: "Get ticket options for dropdowns" })
-  @ApiQuery({ name: "project_id", required: false, schema: { type: "integer", minimum: 1, nullable: true } })
   @ApiQuery({ name: "search", required: false, schema: { type: "string", nullable: true } })
   @ApiQuery({ name: "skip", required: false, schema: { type: "integer", minimum: 0, default: 0, nullable: true } })
   @ApiQuery({ name: "take", required: false, schema: { type: "integer", minimum: 1, default: 20, nullable: true } })
   async listTicketOptions(
     @CurrentUser() user: AuthenticatedUser,
-    @Query("project_id") project_id?: string,
+    @Param("projectId") projectId: string,
     @Query("search") search?: string,
     @Query("skip") skip?: string,
     @Query("take") take?: string,
   ) {
     const isNullish = (v?: string) => v == null || v === "" || v.toLowerCase?.() === "null";
     try {
-      const pid = !isNullish(project_id) ? Number(project_id) : undefined;
-      if (project_id && Number.isNaN(Number(project_id))) {
-        throw new Error(`Invalid project_id param: ${project_id}`);
+      const pid = !isNullish(projectId) ? Number(projectId) : undefined;
+      if (projectId && Number.isNaN(Number(projectId))) {
+        throw new Error(`Invalid project_id param: ${projectId}`);
       }
-      const res = await this.tickets.findAll(user.user_id, {
+      const res = await this.tickets.search(user.user_id, Number(projectId), {
         search: !isNullish(search) ? search : undefined,
         skip: !isNullish(skip) ? Number(skip) : 0,
         take: !isNullish(take) ? Number(take) : 20,
-        filters: [{ field: "project_id", type: FilterValueType.NUMBER, op: FilterOperator.EQ, value: pid }],
       });
 
       const normalized = normalizeObject(res) as TicketsListDto;
@@ -181,7 +172,7 @@ export class TicketsGatewayController {
   @Auth()
   @ApiOperation({ summary: "Get ticket by ID" })
   @ApiOkResponse({ type: TicketDto })
-  async get(@CurrentUser() user: AuthenticatedUser, @Param("id") id: number): Promise<TicketDto> {
+  async get(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: number): Promise<TicketDto> {
     const ticket = await this.tickets.findById(id, user.user_id);
     return normalizeObject(ticket) as TicketDto;
   }
@@ -191,7 +182,7 @@ export class TicketsGatewayController {
   @ApiOperation({ summary: "Update a ticket by ID" })
   @ApiBody({ type: UpdateTicketDto })
   @ApiOkResponse({ type: TicketDto })
-  async update(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() body: UpdateTicketDto): Promise<TicketDto> {
+  async update(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string, @Body() body: UpdateTicketDto): Promise<TicketDto> {
     const ticket = await this.tickets.update(id, body, user.user_id);
     return normalizeObject(ticket) as TicketDto;
   }
@@ -200,7 +191,7 @@ export class TicketsGatewayController {
   @Auth()
   @HttpCode(204)
   @ApiOperation({ summary: "Delete a ticket by ID" })
-  async remove(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+  async remove(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string) {
     await this.tickets.remove(id, user.user_id);
   }
 }

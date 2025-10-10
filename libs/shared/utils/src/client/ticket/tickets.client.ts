@@ -5,7 +5,7 @@ import { CreateTicketDto, UpdateTicketDto, TicketDto, TicketsListDto, BaseSearch
 
 interface TicketsGrpc {
   Create(request: { user_id: string; dto: CreateTicketDto }): Observable<TicketDto>;
-  Search(request: { user_id: string; params?: BaseSearchQueryDto }): Observable<TicketsListDto>;
+  Search(request: { user_id: string; project_id: number; params?: BaseSearchQueryDto }): Observable<TicketsListDto>;
   GetById(request: { user_id: string; id: number }): Observable<TicketDto>;
   Update(request: { user_id: string; id: string; dto: UpdateTicketDto }): Observable<TicketDto>;
   Delete(request: { user_id: string; id: string }): Observable<boolean>;
@@ -25,8 +25,8 @@ export class TicketsGatewayService implements OnModuleInit {
     return await firstValueFrom(this.svc.Create({ user_id, dto }));
   }
 
-  async findAll(user_id: string, params?: BaseSearchQueryDto): Promise<TicketsListDto> {
-    return await firstValueFrom(this.svc.Search({ user_id, params }));
+  async search(user_id: string, project_id: number, params?: BaseSearchQueryDto): Promise<TicketsListDto> {
+    return await firstValueFrom(this.svc.Search({ user_id, project_id, params }));
   }
 
   async findById(id: number, user_id: string): Promise<TicketDto> {

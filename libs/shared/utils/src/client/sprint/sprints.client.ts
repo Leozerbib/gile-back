@@ -6,7 +6,7 @@ import { LoggerClientService } from "@shared/logger";
 
 interface SprintsGrpc {
   Create(req: { ownerId: string; dto: CreateSprintDto }): Observable<SprintDto>;
-  Search(req: { params?: BaseSearchQueryDto; userId: string }): Observable<SprintsListDto>;
+  Search(req: { user_id: string; project_id: number; params?: BaseSearchQueryDto }): Observable<SprintsListDto>;
   GetById(req: { id: string; userId: string; includeMetrics?: boolean }): Observable<SprintDto>;
   GetOverview(req: { projectId: number; params?: BaseSearchQueryDto; userId?: string }): Observable<SprintsListDto>;
   FindByProject(req: { projectId: number; params?: BaseSearchQueryDto; userId?: string }): Observable<SprintsListDto>;
@@ -34,12 +34,12 @@ export class SprintsGatewayService implements OnModuleInit {
     return sprint;
   }
 
-  async findAll(userId: string, params?: BaseSearchQueryDto): Promise<SprintsListDto> {
-    const result = await firstValueFrom(this.svc.Search({ params, userId }));
+  async search(userId: string, projectId: number, params?: BaseSearchQueryDto): Promise<SprintsListDto> {
+    const result = await firstValueFrom(this.svc.Search({ user_id: userId, project_id: projectId, params }));
     await this.loggerClient.log({
       level: "info",
       service: "sprint",
-      func: "sprints-gateway.findAll",
+      func: "sprints-gateway.search",
       message: `Sprints search request via gRPC`,
       data: result,
     });

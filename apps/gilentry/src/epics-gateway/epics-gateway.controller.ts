@@ -7,7 +7,7 @@ import { CreateEpicDto, UpdateEpicDto, EpicDto, EpicListDto, BaseSearchQueryDto 
 import { normalizeObject } from "@shared/utils";
 
 @ApiTags("Epics")
-@Controller("epics")
+@Controller("project/:projectId/epics")
 export class EpicsGatewayController {
   constructor(private readonly epics: EpicsGatewayService) {}
 
@@ -15,7 +15,6 @@ export class EpicsGatewayController {
   @Auth()
   @ApiBearerAuth()
   @ApiOperation({ summary: "List epics within a project with search and pagination" })
-  @ApiQuery({ name: "project_id", required: true, schema: { type: "integer" } })
   @ApiQuery({ name: "search", required: false, schema: { type: "string", nullable: true } })
   @ApiQuery({ name: "skip", required: false, schema: { type: "integer", minimum: 0, default: 0, nullable: true } })
   @ApiQuery({ name: "take", required: false, schema: { type: "integer", minimum: 1, default: 25, nullable: true } })
@@ -24,7 +23,7 @@ export class EpicsGatewayController {
   @ApiOkResponse({ type: EpicListDto })
   async list(
     @CurrentUser() user: AuthenticatedUser,
-    @Query("project_id") projectId: string,
+    @Param("projectId") projectId: string,
     @Query("search") search?: string,
     @Query("skip") skip?: string,
     @Query("take") take?: string,
@@ -61,7 +60,7 @@ export class EpicsGatewayController {
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get an epic by ID" })
   @ApiOkResponse({ type: EpicDto })
-  async get(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): Promise<EpicDto> {
+  async get(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string): Promise<EpicDto> {
     const epicId = Number(id);
     if (Number.isNaN(epicId)) {
       throw new BadRequestException(`Invalid id param: ${id}`);
@@ -78,7 +77,7 @@ export class EpicsGatewayController {
   @ApiOperation({ summary: "Create a new epic" })
   @ApiBody({ type: CreateEpicDto })
   @ApiOkResponse({ type: EpicDto })
-  async create(@CurrentUser() user: AuthenticatedUser, @Body() body: CreateEpicDto) {
+  async create(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Body() body: CreateEpicDto) {
     const result = await this.epics.create(user.user_id, body);
     return normalizeObject(result) as EpicDto;
   }
@@ -89,7 +88,7 @@ export class EpicsGatewayController {
   @ApiOperation({ summary: "Update an epic by ID" })
   @ApiBody({ type: UpdateEpicDto })
   @ApiOkResponse({ type: EpicDto })
-  async update(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string, @Body() body: UpdateEpicDto) {
+  async update(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string, @Body() body: UpdateEpicDto) {
     const epicId = Number(id);
     if (Number.isNaN(epicId)) {
       throw new BadRequestException(`Invalid id param: ${id}`);
@@ -104,7 +103,7 @@ export class EpicsGatewayController {
   @ApiBearerAuth()
   @HttpCode(204)
   @ApiOperation({ summary: "Delete an epic by ID" })
-  async remove(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string) {
+  async remove(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string) {
     const epicId = Number(id);
     if (Number.isNaN(epicId)) {
       throw new BadRequestException(`Invalid id param: ${id}`);
