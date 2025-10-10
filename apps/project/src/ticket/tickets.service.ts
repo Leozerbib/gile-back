@@ -119,7 +119,7 @@ export class TicketsService {
             estimated_hours: dto.estimated_hours ? Number(dto.estimated_hours) : null,
             due_date: dto.due_date ? new Date(dto.due_date) : null,
             project_id: dto.project_id,
-            sprint_id: dto.sprint_id,
+            sprint_id: dto.sprint_id ? dto.sprint_id : null,
             created_by: userId,
             assigned_to: userId,
           },
@@ -331,7 +331,7 @@ export class TicketsService {
           orderBy,
           include: {
             project: { select: { id: true, name: true, slug: true } },
-            sprint: { select: { id: true, name: true, version: true } },
+            sprint: { select: { id: true, name: true, version: true, status: true } },
             assigned_to_user: { select: ProfileOverviewSelect },
             created_by_user: { select: ProfileOverviewSelect },
             updated_by_user: { select: ProfileOverviewSelect },
