@@ -92,10 +92,10 @@ export class UpdateTicketDto {
   actual_hours?: number;
 
   @ApiProperty({ example: "2025-09-23", description: "Due date", required: false })
-  due_date?: string;
+  due_date?: Date;
 
   @ApiProperty({ example: "2025-09-23T15:30:45.123Z", description: "Completed at", required: false })
-  completed_at?: string;
+  completed_at?: Date;
 
   @ApiProperty({ example: "Implementation notes", required: false })
   implementation_notes?: string;

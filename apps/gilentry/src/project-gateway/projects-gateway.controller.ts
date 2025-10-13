@@ -1,8 +1,9 @@
 import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from "@nestjs/common";
-import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags, ApiExtraModels, getSchemaPath } from "@nestjs/swagger";
+import { ApiBearerAuth, ApiBody, ApiOkResponse, ApiOperation, ApiQuery, ApiTags, ApiExtraModels } from "@nestjs/swagger";
 import { ProjectsGatewayService } from "libs/shared/utils/src/client/project/projects.client";
+import { TeamsGatewayService } from "libs/shared/utils/src/client/team/teams.client";
 import { Auth, CurrentUser } from "../auth-gateway/auth.decorators";
-import type { AuthenticatedUser } from "@shared/types";
+import type { AuthenticatedUser, TeamMemberListDto } from "@shared/types";
 import { plainToInstance } from "class-transformer";
 import {
   CreateProjectDto,
@@ -10,6 +11,7 @@ import {
   ProjectDto,
   ProjectsListDto,
   TeamOverview,
+  TeamMemberDto,
   BaseSearchQueryDto,
   SortOrder,
   FilterRule,
@@ -25,7 +27,10 @@ import { normalizeObject, normalizeWithRequiredFields } from "@shared/utils";
 @ApiExtraModels(FilterRule)
 @Controller("projects")
 export class ProjectsGatewayController {
-  constructor(private readonly projects: ProjectsGatewayService) {}
+  constructor(
+    private readonly projects: ProjectsGatewayService,
+    private readonly teams: TeamsGatewayService,
+  ) {}
 
   @Get()
   @Auth()
@@ -168,6 +173,25 @@ export class ProjectsGatewayController {
     }
     const res = await this.projects.getTeam(user.user_id, projectId);
     return normalizeWithRequiredFields(res, ["id", "name", "slug", "is_active"]);
+  }
+
+  @Get(":id/team/members")
+  @Auth()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Get team members for a project" })
+  @ApiOkResponse({ type: [TeamMemberDto] })
+  async getTeamMembers(@CurrentUser() user: AuthenticatedUser, @Param("id") id: string): Promise<TeamMemberListDto> {
+    const projectId = Number(id);
+    if (Number.isNaN(projectId)) {
+      throw new BadRequestException(`Invalid id param: ${id}`);
+    }
+
+    // First get the team for the project
+    const team = await this.projects.getTeam(user.user_id, projectId);
+
+    // Then get the team members using the team ID
+    const result = await this.teams.getMembersOverview(user.user_id, team.id);
+    return result;
   }
 
   @Post()

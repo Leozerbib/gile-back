@@ -20,7 +20,6 @@ import {
   LabelDtoSelect,
   LabelDto,
   SearchQueryBuilder,
-  FilterRule,
 } from "@shared/types";
 import { plainToInstance } from "class-transformer";
 
@@ -497,9 +496,6 @@ export class TicketsService {
       // Vérifier que le ticket existe et récupérer les informations du projet
       const existingTicket = await this.prisma.tickets.findUnique({
         where: { id: ticketId },
-        include: {
-          project: { select: { id: true, workspace_id: true } },
-        },
       });
 
       if (!existingTicket) {
@@ -526,6 +522,8 @@ export class TicketsService {
         if (sprint.project_id !== existingTicket.project_id) {
           throw new RpcException({ code: status.INTERNAL, message: "Sprint does not belong to the ticket's project" });
         }
+      } else if (dto.sprint_id === 0) {
+        dto.sprint_id = undefined;
       }
 
       if (dto.parent_ticket_id) {
@@ -539,44 +537,76 @@ export class TicketsService {
         if (parent.project_id !== existingTicket.project_id) {
           throw new RpcException({ code: status.INTERNAL, message: "Parent ticket does not belong to the same project" });
         }
+      } else if (dto.parent_ticket_id === 0) {
+        dto.parent_ticket_id = undefined;
       }
 
+      // Process DTO to handle date conversion and remove fields that shouldn't be directly updated
+      const processedDto = { ...dto };
+
+      // Convert due_date string to Date object if provided
+      if (processedDto.due_date && typeof processedDto.due_date === "string") {
+        processedDto.due_date = new Date(processedDto.due_date);
+      }
+
+      // Remove fields that are handled separately or shouldn't be in updateData
+      delete processedDto.task_ids;
+      delete processedDto.label_ids;
+      delete processedDto.dependency_ticket_ids;
+
+      // Create update data excluding non-updatable fields
       const updateData: Prisma.ticketsUpdateInput = {
+        // Only include updatable fields from processedDto
+        ...processedDto,
+        // Handle relations properly
+        assigned_to_user: !dto.assigned_to || dto.assigned_to === undefined ? undefined : { connect: { user_id: dto.assigned_to } },
+        // Always update metadata
         updated_by_user: { connect: { user_id: userId } },
         updated_at: new Date(),
+        // Ensure project relation is maintained (if needed)
       };
 
-      // Mise à jour des champs optionnels
-      if (dto.title !== undefined) updateData.title = dto.title;
-      if (dto.description !== undefined) updateData.description = dto.description;
-      if (dto.status !== undefined) updateData.status = dto.status;
-      if (dto.priority !== undefined) updateData.priority = dto.priority;
-      if (dto.category !== undefined) updateData.category = dto.category;
-      if (dto.story_points !== undefined) updateData.story_points = dto.story_points;
-      if (dto.estimated_hours !== undefined) updateData.estimated_hours = dto.estimated_hours ? Number(dto.estimated_hours) : null;
-      if (dto.actual_hours !== undefined) updateData.actual_hours = dto.actual_hours ? Number(dto.actual_hours) : null;
-      if (dto.due_date !== undefined) updateData.due_date = dto.due_date ? new Date(dto.due_date) : null;
-      if (dto.completed_at !== undefined) updateData.completed_at = dto.completed_at ? new Date(dto.completed_at) : null;
-      if (dto.implementation_notes !== undefined) updateData.implementation_notes = dto.implementation_notes;
-      if (dto.testing_notes !== undefined) updateData.testing_notes = dto.testing_notes;
-      if (dto.sprint_id !== undefined) updateData.sprint = { connect: { id: dto.sprint_id } };
-      if (dto.assigned_to !== undefined) updateData.assigned_to_user = { connect: { user_id: dto.assigned_to } };
-      if (dto.ticket_number !== undefined) updateData.ticket_number = dto.ticket_number;
-
-      // Handle task_tickets updates
+      // Handle task_tickets updates with fetch-compare-update logic
       if (dto.task_ids !== undefined) {
-        await this.prisma.task_tickets.deleteMany({ where: { ticket_id: ticketId } });
-        if (dto.task_ids.length > 0) {
+        const existingTaskIds = await this.prisma.task_tickets
+          .findMany({
+            where: { ticket_id: ticketId },
+            select: { task_id: true },
+          })
+          .then(tasks => tasks.map(t => t.task_id));
+
+        const newTaskIds = dto.task_ids || [];
+        const tasksToAdd = newTaskIds.filter(id => !existingTaskIds.includes(id));
+        const tasksToRemove = existingTaskIds.filter(id => !newTaskIds.includes(id));
+
+        // Remove tasks that are no longer needed
+        if (tasksToRemove.length > 0) {
+          await this.prisma.task_tickets.deleteMany({
+            where: {
+              ticket_id: ticketId,
+              task_id: { in: tasksToRemove },
+            },
+          });
+        }
+
+        // Add new tasks
+        if (tasksToAdd.length > 0) {
           await this.prisma.task_tickets.createMany({
-            data: dto.task_ids.map(taskId => ({ ticket_id: ticketId, task_id: taskId })),
+            data: tasksToAdd.map(taskId => ({ ticket_id: ticketId, task_id: taskId })),
             skipDuplicates: true,
           });
         }
       }
 
-      // Handle ticket_dependencies updates (consider parent_ticket_id fallback)
+      // Handle ticket_dependencies updates with fetch-compare-update logic
       if (dto.dependency_ticket_ids !== undefined || dto.parent_ticket_id !== undefined) {
-        await this.prisma.ticket_dependencies.deleteMany({ where: { ticket_id: ticketId } });
+        const existingDepIds = await this.prisma.ticket_dependencies
+          .findMany({
+            where: { ticket_id: ticketId },
+            select: { depends_on_ticket_id: true },
+          })
+          .then(deps => deps.map(d => d.depends_on_ticket_id));
+
         const deps = new Set<number>();
         if (Array.isArray(dto.dependency_ticket_ids)) {
           dto.dependency_ticket_ids.forEach(d => deps.add(d));
@@ -584,25 +614,65 @@ export class TicketsService {
         if (typeof dto.parent_ticket_id === "number" && dto.parent_ticket_id > 0) {
           deps.add(dto.parent_ticket_id);
         }
-        if (deps.size > 0) {
+
+        const newDepIds = Array.from(deps);
+        const depsToAdd = newDepIds.filter(id => !existingDepIds.includes(id));
+        const depsToRemove = existingDepIds.filter(id => !newDepIds.includes(id));
+
+        // Remove dependencies that are no longer needed
+        if (depsToRemove.length > 0) {
+          await this.prisma.ticket_dependencies.deleteMany({
+            where: {
+              ticket_id: ticketId,
+              depends_on_ticket_id: { in: depsToRemove },
+            },
+          });
+        }
+
+        // Add new dependencies
+        if (depsToAdd.length > 0) {
           await this.prisma.ticket_dependencies.createMany({
-            data: Array.from(deps).map(depId => ({ ticket_id: ticketId, depends_on_ticket_id: depId })),
+            data: depsToAdd.map(depId => ({ ticket_id: ticketId, depends_on_ticket_id: depId })),
             skipDuplicates: true,
           });
         }
       }
 
-      // Handle label updates
+      // Handle label updates with fetch-compare-update logic
       if (dto.label_ids !== undefined) {
-        await this.prisma.ticket_labels.deleteMany({ where: { ticket_id: ticketId } });
-        if (dto.label_ids.length > 0) {
+        const existingLabelIds = await this.prisma.ticket_labels
+          .findMany({
+            where: { ticket_id: ticketId },
+            select: { label_id: true },
+          })
+          .then(labels => labels.map(l => l.label_id));
+
+        const newLabelIds = dto.label_ids || [];
+        const labelsToAdd = newLabelIds.filter(id => !existingLabelIds.includes(id));
+        const labelsToRemove = existingLabelIds.filter(id => !newLabelIds.includes(id));
+
+        // Remove labels that are no longer needed
+        if (labelsToRemove.length > 0) {
+          await this.prisma.ticket_labels.deleteMany({
+            where: {
+              ticket_id: ticketId,
+              label_id: { in: labelsToRemove },
+            },
+          });
+        }
+
+        // Add new labels
+        if (labelsToAdd.length > 0) {
           await this.prisma.ticket_labels.createMany({
-            data: dto.label_ids.map(labelId => ({ ticket_id: ticketId, label_id: labelId, created_by: userId })),
+            data: labelsToAdd.map(labelId => ({ ticket_id: ticketId, label_id: labelId, created_by: userId })),
             skipDuplicates: true,
           });
         }
       }
-
+      console.log("existingTicket", existingTicket);
+      console.log("dto", dto);
+      console.log("updateData", updateData);
+console.log("user", userId);
       const updatedTicket = await this.prisma.tickets.update({
         where: { id: ticketId },
         data: updateData,
