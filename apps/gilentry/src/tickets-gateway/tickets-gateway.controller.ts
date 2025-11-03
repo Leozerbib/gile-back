@@ -76,6 +76,8 @@ export class TicketsGatewayController {
       throw new BadRequestException("project_id is required");
     }
 
+    console.log({ search, skip, take, sort, order, groupBy, subGroupBy, dateGranularity, filter });
+
     const isNullish = (v?: string) => v == null || v === "" || v.toLowerCase?.() === "null";
     // Parse filter query param which may come as JSON string(s)
     const parseFilterParam = (input?: string | string[]): FilterRule[] | undefined => {
@@ -193,5 +195,69 @@ export class TicketsGatewayController {
   @ApiOperation({ summary: "Delete a ticket by ID" })
   async remove(@CurrentUser() user: AuthenticatedUser, @Param("projectId") projectId: string, @Param("id") id: string) {
     await this.tickets.remove(id, user.user_id);
+  }
+
+  @Put(":id/dependencies")
+  @Auth()
+  @HttpCode(200)
+  @ApiOperation({ summary: "Upsert dependency tickets for a ticket" })
+  @ApiBody({ schema: { type: "object", properties: { dependency_ticket_ids: { type: "array", items: { type: "number" } } } } })
+  @ApiOkResponse({ schema: { type: "object", properties: { success: { type: "boolean" } } } })
+  async upsertDependencyTickets(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("projectId") projectId: string,
+    @Param("id") id: string,
+    @Body("dependency_ticket_ids") dependencyTicketIds: number[],
+  ): Promise<{ success: boolean }> {
+    const result = await this.tickets.upsertDependencyTickets(Number(id), dependencyTicketIds, user.user_id);
+    return { success: result };
+  }
+
+  @Put(":id/labels")
+  @Auth()
+  @HttpCode(200)
+  @ApiOperation({ summary: "Upsert labels for a ticket" })
+  @ApiBody({ schema: { type: "object", properties: { label_ids: { type: "array", items: { type: "number" } } } } })
+  @ApiOkResponse({ schema: { type: "object", properties: { success: { type: "boolean" } } } })
+  async upsertTicketLabels(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("projectId") projectId: string,
+    @Param("id") id: string,
+    @Body("label_ids") labelIds: number[],
+  ): Promise<{ success: boolean }> {
+    const result = await this.tickets.upsertTicketLabels(Number(id), labelIds, user.user_id);
+    return { success: result };
+  }
+
+  @Put(":id/assign")
+  @Auth()
+  @HttpCode(200)
+  @ApiOperation({ summary: "Assign a ticket to a user" })
+  @ApiBody({ schema: { type: "object", properties: { assigned_to_user_id: { type: "string" } }, required: ["assigned_to_user_id"] } })
+  @ApiOkResponse({ schema: { type: "object", properties: { success: { type: "boolean" } } } })
+  async assignTicket(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("projectId") projectId: string,
+    @Param("id") id: string,
+    @Body("assigned_to_user_id") assignedToUserId: string,
+  ): Promise<{ success: boolean }> {
+    const result = await this.tickets.assignTicket(Number(id), assignedToUserId, user.user_id);
+    return { success: result };
+  }
+
+  @Put(":id/sprint")
+  @Auth()
+  @HttpCode(200)
+  @ApiOperation({ summary: "Assign a ticket to a sprint" })
+  @ApiBody({ schema: { type: "object", properties: { sprint_id: { type: "number", nullable: true } }, required: ["sprint_id"] } })
+  @ApiOkResponse({ schema: { type: "object", properties: { success: { type: "boolean" } } } })
+  async assignTicketToSprint(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param("projectId") projectId: string,
+    @Param("id") id: string,
+    @Body("sprint_id") sprintId: number,
+  ): Promise<{ success: boolean }> {
+    const result = await this.tickets.assignTicketToSprint(Number(id), sprintId, user.user_id);
+    return { success: result };
   }
 }

@@ -590,6 +590,41 @@ export class SprintDto extends SprintOverview {
   updated_at?: string;
 }
 
+export class LastFieldSprintDto {
+  @ApiProperty({
+    description: "Identifiant du sprint à démarrer",
+    example: 123,
+    type: "integer",
+    required: true,
+  })
+  @Expose()
+  @IsInt({ message: "L'ID du sprint doit être un entier" })
+  @Min(1, { message: "L'ID du sprint doit être supérieur à 0" })
+  version!: number;
+
+  @ApiProperty({
+    description: "Date de fin du sprint",
+    example: "2025-09-23T09:41:59.298Z",
+    format: "date-time",
+    type: "string",
+    required: true,
+  })
+  @Expose()
+  @IsString({ message: "La date de fin doit être une chaîne de caractères" })
+  start_date!: string;
+
+  @ApiProperty({
+    description: "Date de fin du sprint",
+    example: "2025-09-23T09:41:59.298Z",
+    format: "date-time",
+    type: "string",
+    required: true,
+  })
+  @Expose()
+  @IsString({ message: "La date de fin doit être une chaîne de caractères" })
+  end_date!: string;
+}
+
 /**
  * DTO pour la liste paginée des sprints
  * Compatible avec gRPC SprintService et Prisma queries

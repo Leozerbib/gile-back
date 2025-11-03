@@ -32,3 +32,7 @@ export const WORKSPACE_MEMBERS_SERVICE_NAME = "WorkspaceMembers";
 export const PROTO_LABELS_PATH = "libs/proto/labels/v1/labels.proto";
 export const PROTO_LABELS_PACKAGE = "labels.v1";
 export const LABELS_SERVICE_NAME = "Labels";
+
+export const PROTO_VECTOR_PATH = "libs/proto/vector/v1/vector.proto";
+export const PROTO_VECTOR_PACKAGE = "vector.v1";
+export const VECTOR_SERVICE_NAME = "VectorService";

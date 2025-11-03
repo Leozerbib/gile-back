@@ -6,7 +6,7 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build gilentry && nest build auth && nest build workspace && nest build project && nest build chat && nest build analytics && nest build logger",
+    "build": "nest build gilentry && nest build auth && nest build workspace && nest build project && nest build chat && nest build analytics && nest build logger && nest build vector",
     "build:main": "nest build gilentry",
     "build:auth": "nest build auth",
     "build:workspace": "nest build workspace",
@@ -14,9 +14,10 @@
     "build:chat": "nest build chat",
     "build:analytics": "nest build analytics",
     "build:logger": "nest build logger",
+    "build:vector": "nest build vector",
     "format": "prettier --write \"apps/**/*.ts\" \"libs/**/*.ts\"",
     "start": "nest start main",
-    "start:dev": "nest start main --watch",
+    "start:dev": "start /B nest start auth --watch >nul 2>&1 && start /B nest start workspace --watch >nul 2>&1 && start /B nest start project --watch >nul 2>&1 && start /B nest start chat --watch >nul 2>&1 && start /B nest start analytics --watch >nul 2>&1 && start /B nest start vector --watch >nul 2>&1 && start /B nest start main --watch >nul 2>&1 && nest start logger --watch",
     "start:debug": "nest start main --debug --watch",
     "start:prod": "node dist/apps/gile-back/main",
     "start:main": "nest start main",
@@ -33,6 +34,10 @@
     "start:dev:analytics": "nest start analytics --watch",
     "start:logger": "nest start logger",
     "start:dev:logger": "nest start logger --watch",
+    "start:vector": "nest start vector",
+    "start:dev:vector": "nest start vector --watch",
+    "start:dev:logger-only": "start /B nest start auth >nul 2>&1 && start /B nest start workspace >nul 2>&1 && start /B nest start project >nul 2>&1 && start /B nest start chat >nul 2>&1 && start /B nest start analytics >nul 2>&1 && start /B nest start vector >nul 2>&1 && start /B nest start main --watch >nul 2>&1 && nest start logger --watch",
+    "kill:all": "taskkill /F /IM node.exe",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -44,18 +49,18 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.11.0",
+    "@grpc/proto-loader": "^0.7.13",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.1",
-    "@nestjs/microservices": "^11.1.6",
     "@nestjs/jwt": "^11.0.0",
+    "@nestjs/microservices": "^11.1.6",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/swagger": "^11.2.0",
     "@prisma/client": "^6.13.0",
     "@supabase/supabase-js": "^2.54.0",
-    "@grpc/grpc-js": "^1.11.0",
-    "@grpc/proto-loader": "^0.7.13",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "dotenv": "^17.2.1",
@@ -89,6 +94,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "tsconfig-paths-jest": "^0.0.1",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
@@ -110,6 +116,14 @@
     "testEnvironment": "node",
     "roots": [
       "<rootDir>/apps/"
-    ]
+    ],
+    "moduleNameMapper": {
+      "^@shared/prisma$": "<rootDir>/libs/shared/prisma/src",
+      "^@shared/logger$": "<rootDir>/libs/shared/logger/src",
+      "^@shared/errors$": "<rootDir>/libs/shared/errors/src",
+      "^@shared/types$": "<rootDir>/libs/shared/types/src",
+      "^@shared/utils$": "<rootDir>/libs/shared/utils/src",
+      "^@proto$": "<rootDir>/libs/proto"
+    }
   }
 }

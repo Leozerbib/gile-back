@@ -121,6 +121,15 @@
         "tsConfigPath": "tsconfig.build.json"
       }
     },
+    "vector": {
+      "type": "application",
+      "root": "apps/vector",
+      "entryFile": "main",
+      "sourceRoot": "apps/vector/src",
+      "compilerOptions": {
+        "tsConfigPath": "tsconfig.build.json"
+      }
+    },
     "workspace": {
       "type": "application",
       "root": "apps/workspace",

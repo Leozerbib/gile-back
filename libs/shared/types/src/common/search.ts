@@ -228,7 +228,7 @@ export class SearchQueryBuilder {
    */
   static buildSortOptions(sortOptions?: SortOption): Record<string, "asc" | "desc"> {
     if (!sortOptions) {
-      return { createdAt: "desc" as const }; // Tri par défaut
+      return { created_at: "desc" as const }; // Tri par défaut
     }
 
     const sort: Record<string, "asc" | "desc"> = {};
@@ -277,9 +277,9 @@ export class SearchQueryBuilder {
 
     switch (type) {
       case FilterValueType.NUMBER:
-        return typeof value === 'number' ? value : Number(value);
+        return typeof value === "number" ? value : Number(value);
       case FilterValueType.DATE:
-        if (typeof value === 'string') {
+        if (typeof value === "string") {
           const date = new Date(value);
           return isNaN(date.getTime()) ? value : date;
         }
@@ -296,7 +296,7 @@ export class SearchQueryBuilder {
    */
   private static parseValues(values: Array<string | number> | undefined, type: FilterValueType): Array<any> | undefined {
     if (!values) return values;
-    
+
     return values.map(value => this.parseValue(value, type));
   }
 
@@ -321,11 +321,11 @@ export class SearchQueryBuilder {
     for (const rule of rules) {
       const f = rule.field;
       const ci = rule.caseInsensitive ? { mode: "insensitive" as const } : {};
-      
+
       // Parse les valeurs selon leur type
       const parsedValue = this.parseValue(rule.value, rule.type);
       const parsedValues = this.parseValues(rule.values, rule.type);
-      
+
       switch (rule.op) {
         case FilterOperator.EQ:
           mergeCond({ [f]: parsedValue });

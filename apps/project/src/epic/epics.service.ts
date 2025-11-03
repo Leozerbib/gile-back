@@ -4,7 +4,18 @@ import { status } from "@grpc/grpc-js";
 import { PrismaService } from "@shared/prisma";
 import { LoggerClientService } from "@shared/logger";
 import { plainToInstance } from "class-transformer";
-import { CreateEpicDto, UpdateEpicDto, EpicDto, EpicListDto, BaseSearchQueryDto, EpicDtoSelect, EpicListSelect, EpicOverview, BasePaginationDto, SearchQueryBuilder } from "@shared/types";
+import {
+  CreateEpicDto,
+  UpdateEpicDto,
+  EpicDto,
+  EpicListDto,
+  BaseSearchQueryDto,
+  EpicDtoSelect,
+  EpicListSelect,
+  EpicOverview,
+  BasePaginationDto,
+  SearchQueryBuilder,
+} from "@shared/types";
 import { TeamMembersService } from "apps/workspace/src/team/team-members.service";
 import { Prisma, EpicStatus, EpicCategory } from "@prisma/client";
 

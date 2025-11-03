@@ -55,103 +55,11 @@ model agent {
   @@schema("bibz-agile")
 }
 
-model agent_task_definitions {
-  id              Int       @id @default(autoincrement())
-  created_at      DateTime  @default(now()) @db.Timestamp(6)
-  updated_at      DateTime? @db.Timestamp(6)
-  name            String    @unique
-  description     String?
-  ui_color        String?
-  config_data     Json?     @default("{}")
-  created_by      String?   @db.Uuid
-  updated_by      String?   @db.Uuid
-  created_by_user profiles? @relation("agent_task_definitions_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_agent_task_def_created_by")
-  updated_by_user profiles? @relation("agent_task_definitions_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_agent_task_def_updated_by")
-  chat            chat[]
-
-  @@schema("bibz-agile")
-}
-
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model chat {
-  id                       Int                     @id(map: "Chat-step_pkey") @default(autoincrement())
-  created_at               DateTime?               @default(now()) @db.Timestamp(6)
-  updated_at               DateTime?               @db.Timestamp(6)
-  session_id               String?                 @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  title                    String?
-  conversation_type_id     Int
-  metadata                 Json?
-  created_by               String?                 @db.Uuid
-  updated_by               String?                 @db.Uuid
-  projectid                Int?
-  workflow_definition_id   Int?
-  completion_definition_id Int?
-  agent_task_definition_id Int?
-  chatbot_config_id        Int?
-  workspace_id             String                  @db.Uuid
-  workspace                workspaces              @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "chat_workspaces_fk")
-  agent_task_definitions   agent_task_definitions? @relation(fields: [agent_task_definition_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_chat_agent_task_def")
-  chatbot_configurations   chatbot_configurations? @relation(fields: [chatbot_config_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_chat_chatbot_conf")
-  completion_definitions   completion_definitions? @relation(fields: [completion_definition_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_chat_completion_def")
-  conversation_types       conversation_types      @relation(fields: [conversation_type_id], references: [id], onUpdate: NoAction, map: "fk_chat_conversation_type")
-  created_by_user          profiles?               @relation("chat_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chat_created_by")
-  updated_by_user          profiles?               @relation("chat_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chat_updated_by")
-  workflow_definitions     workflow_definitions?   @relation(fields: [workflow_definition_id], references: [id], onDelete: Restrict, onUpdate: NoAction, map: "fk_chat_workflow_def")
-  message                  message[]
-
-  @@index([agent_task_definition_id], map: "idx_chat_agent_task_definition_id")
-  @@index([chatbot_config_id], map: "idx_chat_chatbot_config_id")
-  @@index([completion_definition_id], map: "idx_chat_completion_definition_id")
-  @@index([workflow_definition_id], map: "idx_chat_workflow_definition_id")
-  @@schema("bibz-agile")
-}
-
-model chatbot_configurations {
-  id              Int       @id @default(autoincrement())
-  created_at      DateTime  @default(now()) @db.Timestamp(6)
-  updated_at      DateTime? @db.Timestamp(6)
-  name            String    @unique
-  description     String?
-  ui_color        String?
-  config_data     Json?     @default("{}")
-  created_by      String?   @db.Uuid
-  updated_by      String?   @db.Uuid
-  chat            chat[]
-  created_by_user profiles? @relation("chatbot_configurations_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chatbot_conf_created_by")
-  updated_by_user profiles? @relation("chatbot_configurations_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_chatbot_conf_updated_by")
-
-  @@schema("bibz-agile")
-}
-
-model completion_definitions {
-  id              Int       @id @default(autoincrement())
-  created_at      DateTime  @default(now()) @db.Timestamp(6)
-  updated_at      DateTime? @db.Timestamp(6)
-  name            String    @unique
-  description     String?
-  ui_color        String?
-  config_data     Json?     @default("{}")
-  created_by      String?   @db.Uuid
-  updated_by      String?   @db.Uuid
-  chat            chat[]
-  created_by_user profiles? @relation("completion_definitions_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_completion_def_created_by")
-  updated_by_user profiles? @relation("completion_definitions_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_completion_def_updated_by")
-
-  @@schema("bibz-agile")
-}
-
-model conversation_types {
-  id          Int       @id @default(autoincrement())
-  created_at  DateTime  @default(now()) @db.Timestamp(6)
-  updated_at  DateTime? @db.Timestamp(6)
-  name        String    @unique
-  description String?
-  ui_color    String?
-  metadata    Json?
-  chat        chat[]
-
-  @@schema("bibz-agile")
-}
+/// We could not retrieve columns for the underlying table. Either it has none or you are missing rights to see them. Please check your privileges.
+// model chat {
+// @@schema("bibz-agile")
+// }
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model epics {
@@ -223,31 +131,6 @@ model languages {
   @@schema("bibz-agile")
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model message {
-  id               Int       @id(map: "chat_copy_pkey") @default(autoincrement())
-  created_at       DateTime? @default(now()) @db.Timestamp(6)
-  updated_at       DateTime? @db.Timestamp(6)
-  chat_id          Int
-  message_role     String
-  raw_message_json Json?
-  markdown         String?
-  step             String?   @default("analyse")
-  status           String?
-  response_time_ms Int?
-  error_message    String?
-  created_by       String?   @db.Uuid
-  updated_by       String?   @db.Uuid
-  message          String?
-  chat             chat      @relation(fields: [chat_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_message_chat")
-  created_by_user  profiles? @relation("message_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_created_by")
-  updated_by_user  profiles? @relation("message_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_message_updated_by")
-
-  @@index([message_role], map: "idx_message_message_role")
-  @@index([status], map: "idx_message_status")
-  @@schema("bibz-agile")
-}
-
 model model_usage {
   id                BigInt     @id @default(autoincrement())
   created_at        DateTime   @default(now()) @db.Timestamptz(6)
@@ -270,62 +153,50 @@ model model_usage {
 }
 
 model profiles {
-  id                                            BigInt                      @id @default(autoincrement())
-  created_at                                    DateTime                    @default(now()) @db.Timestamptz(6)
-  username                                      String                      @unique @db.VarChar
-  user_id                                       String                      @unique @db.Uuid
-  updated_at                                    DateTime?                   @db.Timestamptz(6)
-  first_name                                    String?                     @db.VarChar(100)
-  last_name                                     String?                     @db.VarChar(100)
-  avatar_url                                    String?                     @db.VarChar(500)
-  activityLogs                                  activity_logs[]
-  agent_task_definitions_created_by_to_profiles agent_task_definitions[]    @relation("agent_task_definitions_created_by_to_profiles")
-  agent_task_definitions_updated_by_to_profiles agent_task_definitions[]    @relation("agent_task_definitions_updated_by_to_profiles")
-  chat_created_by_to_profiles                   chat[]                      @relation("chat_created_by_to_profiles")
-  chat_updated_by_to_profiles                   chat[]                      @relation("chat_updated_by_to_profiles")
-  chatbot_configurations_created_by_to_profiles chatbot_configurations[]    @relation("chatbot_configurations_created_by_to_profiles")
-  chatbot_configurations_updated_by_to_profiles chatbot_configurations[]    @relation("chatbot_configurations_updated_by_to_profiles")
-  completion_definitions_created_by_to_profiles completion_definitions[]    @relation("completion_definitions_created_by_to_profiles")
-  completion_definitions_updated_by_to_profiles completion_definitions[]    @relation("completion_definitions_updated_by_to_profiles")
-  epics_created_by_to_profiles                  epics[]                     @relation("epics_created_by_to_profiles")
-  epics_updated_by_to_profiles                  epics[]                     @relation("epics_updated_by_to_profiles")
-  labels_created_by_to_profiles                 labels[]                    @relation("labels_created_by_to_profiles")
-  labels_updated_by_to_profiles                 labels[]                    @relation("labels_updated_by_to_profiles")
-  message_created_by_to_profiles                message[]                   @relation("message_created_by_to_profiles")
-  message_updated_by_to_profiles                message[]                   @relation("message_updated_by_to_profiles")
-  model_usage                                   model_usage[]
-  project_teams                                 project_teams[]
-  projects_created_by_to_profiles               projects[]                  @relation("projects_created_by_to_profiles")
-  projects_project_manager_id_to_profiles       projects[]                  @relation("projects_project_manager_id_to_profiles")
-  projects_updated_by_to_profiles               projects[]                  @relation("projects_updated_by_to_profiles")
-  sprints_created_by_to_profiles                sprints[]                   @relation("sprints_created_by_to_profiles")
-  sprints_updated_by_to_profiles                sprints[]                   @relation("sprints_updated_by_to_profiles")
-  stacks_created_by_to_profiles                 stacks[]                    @relation("stacks_created_by_to_profiles")
-  stacks_updated_by_to_profiles                 stacks[]                    @relation("stacks_updated_by_to_profiles")
-  tasks_created_by_to_profiles                  tasks[]                     @relation("tasks_created_by_to_profiles")
-  tasks_updated_by_to_profiles                  tasks[]                     @relation("tasks_updated_by_to_profiles")
-  team_members                                  team_members[]
-  teams_created_by_to_profiles                  teams[]                     @relation("teams_created_by_to_profiles")
-  teams_updated_by_to_profiles                  teams[]                     @relation("teams_updated_by_to_profiles")
-  ticket_comments_author_id_to_profiles         ticket_comments[]           @relation("ticket_comments_author_id_to_profiles")
-  ticket_comments_created_by_to_profiles        ticket_comments[]           @relation("ticket_comments_created_by_to_profiles")
-  ticket_comments_updated_by_to_profiles        ticket_comments[]           @relation("ticket_comments_updated_by_to_profiles")
-  ticket_labels                                 ticket_labels[]
-  tickets_created_by_to_profiles                tickets[]                   @relation("tickets_created_by_to_profiles")
-  tickets_updated_by_to_profiles                tickets[]                   @relation("tickets_updated_by_to_profiles")
-  tickets_assigned_to_to_profiles               tickets[]                   @relation("tickets_assigned_to_to_profiles")
-  user_notification_settings                    user_notification_settings?
-  user_preferences                              user_preferences?
-  workflow_definitions_created_by_to_profiles   workflow_definitions[]      @relation("workflow_definitions_created_by_to_profiles")
-  workflow_definitions_updated_by_to_profiles   workflow_definitions[]      @relation("workflow_definitions_updated_by_to_profiles")
-  workspace_invitations_invited_by_to_profiles  workspace_invitations[]     @relation("workspace_invitations_invited_by_to_profiles")
-  workspace_invitations_user_id_to_profiles     workspace_invitations[]     @relation("workspace_invitations_user_id_to_profiles")
-  workspace_members_created_by_to_profiles      workspace_members[]         @relation("workspace_members_created_by_to_profiles")
-  workspace_members_updated_by_to_profiles      workspace_members[]         @relation("workspace_members_updated_by_to_profiles")
-  workspace_members                             workspace_members[]
-  workspaces_created_by_to_profiles             workspaces[]                @relation("workspaces_created_by_to_profiles")
-  workspaces                                    workspaces[]
-  workspaces_updated_by_to_profiles             workspaces[]                @relation("workspaces_updated_by_to_profiles")
+  id                                           BigInt                      @id @default(autoincrement())
+  created_at                                   DateTime                    @default(now()) @db.Timestamptz(6)
+  username                                     String                      @unique @db.VarChar
+  user_id                                      String                      @unique @db.Uuid
+  updated_at                                   DateTime?                   @db.Timestamptz(6)
+  first_name                                   String?                     @db.VarChar(100)
+  last_name                                    String?                     @db.VarChar(100)
+  avatar_url                                   String?                     @db.VarChar(500)
+  activityLogs                                 activity_logs[]
+  epics_created_by_to_profiles                 epics[]                     @relation("epics_created_by_to_profiles")
+  epics_updated_by_to_profiles                 epics[]                     @relation("epics_updated_by_to_profiles")
+  labels_created_by_to_profiles                labels[]                    @relation("labels_created_by_to_profiles")
+  labels_updated_by_to_profiles                labels[]                    @relation("labels_updated_by_to_profiles")
+  model_usage                                  model_usage[]
+  project_teams                                project_teams[]
+  projects_created_by_to_profiles              projects[]                  @relation("projects_created_by_to_profiles")
+  projects_project_manager_id_to_profiles      projects[]                  @relation("projects_project_manager_id_to_profiles")
+  projects_updated_by_to_profiles              projects[]                  @relation("projects_updated_by_to_profiles")
+  sprints_created_by_to_profiles               sprints[]                   @relation("sprints_created_by_to_profiles")
+  sprints_updated_by_to_profiles               sprints[]                   @relation("sprints_updated_by_to_profiles")
+  stacks_created_by_to_profiles                stacks[]                    @relation("stacks_created_by_to_profiles")
+  stacks_updated_by_to_profiles                stacks[]                    @relation("stacks_updated_by_to_profiles")
+  tasks_created_by_to_profiles                 tasks[]                     @relation("tasks_created_by_to_profiles")
+  tasks_updated_by_to_profiles                 tasks[]                     @relation("tasks_updated_by_to_profiles")
+  team_members                                 team_members[]
+  teams_created_by_to_profiles                 teams[]                     @relation("teams_created_by_to_profiles")
+  teams_updated_by_to_profiles                 teams[]                     @relation("teams_updated_by_to_profiles")
+  ticket_comments_author_id_to_profiles        ticket_comments[]           @relation("ticket_comments_author_id_to_profiles")
+  ticket_comments_created_by_to_profiles       ticket_comments[]           @relation("ticket_comments_created_by_to_profiles")
+  ticket_comments_updated_by_to_profiles       ticket_comments[]           @relation("ticket_comments_updated_by_to_profiles")
+  ticket_labels                                ticket_labels[]
+  tickets_created_by_to_profiles               tickets[]                   @relation("tickets_created_by_to_profiles")
+  tickets_updated_by_to_profiles               tickets[]                   @relation("tickets_updated_by_to_profiles")
+  tickets_assigned_to_to_profiles              tickets[]                   @relation("tickets_assigned_to_to_profiles")
+  user_notification_settings                   user_notification_settings?
+  user_preferences                             user_preferences?
+  workspace_invitations_invited_by_to_profiles workspace_invitations[]     @relation("workspace_invitations_invited_by_to_profiles")
+  workspace_invitations_user_id_to_profiles    workspace_invitations[]     @relation("workspace_invitations_user_id_to_profiles")
+  workspace_members_created_by_to_profiles     workspace_members[]         @relation("workspace_members_created_by_to_profiles")
+  workspace_members_updated_by_to_profiles     workspace_members[]         @relation("workspace_members_updated_by_to_profiles")
+  workspace_members                            workspace_members[]
+  workspaces_created_by_to_profiles            workspaces[]                @relation("workspaces_created_by_to_profiles")
+  workspaces                                   workspaces[]
+  workspaces_updated_by_to_profiles            workspaces[]                @relation("workspaces_updated_by_to_profiles")
 
   @@schema("bibz-agile")
 }
@@ -347,38 +218,39 @@ model project_teams {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model projects {
-  id                 Int             @id @default(autoincrement())
-  created_at         DateTime        @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime?       @db.Timestamptz(6)
-  created_by         String?         @db.Uuid
-  updated_by         String?         @db.Uuid
-  workspace_id       String          @db.Uuid
-  project_manager_id String?         @db.Uuid
-  name               String          @db.VarChar(255)
-  slug               String          @db.VarChar(255)
+  id                 Int                @id @default(autoincrement())
+  created_at         DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at         DateTime?          @db.Timestamptz(6)
+  created_by         String?            @db.Uuid
+  updated_by         String?            @db.Uuid
+  workspace_id       String             @db.Uuid
+  project_manager_id String?            @db.Uuid
+  name               String             @db.VarChar(255)
+  slug               String             @db.VarChar(255)
   description        String?
   full_description   String?
-  start_date         DateTime?       @db.Date
-  end_date           DateTime?       @db.Date
-  actual_end_date    DateTime?       @db.Date
-  status             ProjectStatus   @default(TODO)
-  priority           ProjectPriority @default(MEDIUM)
-  progress           Int             @default(0) @db.SmallInt
-  is_archived        Boolean         @default(false)
-  is_public          Boolean         @default(false)
-  settings           Json?           @default("{}")
-  custom_fields      Json?           @default("{}")
+  start_date         DateTime?          @db.Date
+  end_date           DateTime?          @db.Date
+  actual_end_date    DateTime?          @db.Date
+  status             ProjectStatus      @default(TODO)
+  priority           ProjectPriority    @default(MEDIUM)
+  progress           Int                @default(0) @db.SmallInt
+  is_archived        Boolean            @default(false)
+  is_public          Boolean            @default(false)
+  settings           Json?              @default("{}")
+  custom_fields      Json?              @default("{}")
   activityLogs       activity_logs[]
   epics              epics[]
   usage              model_usage[]
   teams              project_teams[]
-  created_by_user    profiles?       @relation("projects_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
-  manager            profiles?       @relation("projects_project_manager_id_to_profiles", fields: [project_manager_id], references: [user_id], map: "fk_projects_manager")
-  updated_by_user    profiles?       @relation("projects_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
-  workspace          workspaces      @relation(fields: [workspace_id], references: [id], onDelete: Cascade, map: "fk_projects_workspace")
+  created_by_user    profiles?          @relation("projects_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: Restrict, map: "fk_projects_created_by")
+  manager            profiles?          @relation("projects_project_manager_id_to_profiles", fields: [project_manager_id], references: [user_id], map: "fk_projects_manager")
+  updated_by_user    profiles?          @relation("projects_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: Restrict, map: "fk_projects_updated_by")
+  workspace          workspaces         @relation(fields: [workspace_id], references: [id], onDelete: Cascade, map: "fk_projects_workspace")
   sprints            sprints[]
   stacks             stacks[]
   tickets            tickets[]
+  vector_documents   vector_documents[]
 
   @@unique([workspace_id, slug], map: "uk_projects_workspace_slug")
   @@index([is_archived], map: "idx_projects_archived")
@@ -690,23 +562,6 @@ model user_preferences {
   @@schema("bibz-agile")
 }
 
-model workflow_definitions {
-  id              Int       @id @default(autoincrement())
-  created_at      DateTime  @default(now()) @db.Timestamp(6)
-  updated_at      DateTime? @db.Timestamp(6)
-  name            String    @unique(map: "idx_workflow_definitions_name")
-  description     String?
-  ui_color        String?
-  config_data     Json?     @default("{}")
-  created_by      String?   @db.Uuid
-  updated_by      String?   @db.Uuid
-  chat            chat[]
-  created_by_user profiles? @relation("workflow_definitions_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workflow_def_created_by")
-  updated_by_user profiles? @relation("workflow_definitions_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workflow_def_updated_by")
-
-  @@schema("bibz-agile")
-}
-
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model workspace_invitations {
   id                  String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -777,30 +632,30 @@ model workspace_settings {
 
 /// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model workspaces {
-  id              String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  created_at      DateTime                @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime?               @db.Timestamptz(6)
-  created_by      String?                 @db.Uuid
-  updated_by      String?                 @db.Uuid
-  name            String                  @db.VarChar(255)
-  slug            String                  @unique(map: "uk_workspaces_slug") @db.VarChar(255)
-  description     String?
-  logo_url        String?                 @db.VarChar(500)
-  visibility      WorkspaceVisibility     @default(PRIVATE)
-  is_active       Boolean                 @default(true)
-  owner_id        String                  @db.Uuid
-  chats           chat[]
-  labels          labels[]
-  usage           model_usage[]
-  projects        projects[]
-  prompts         prompt[]
-  teams           teams[]
-  invitations     workspace_invitations[]
-  members         workspace_members[]
-  settings        workspace_settings?
-  created_by_user profiles?               @relation("workspaces_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspaces_created_by")
-  owner           profiles                @relation(fields: [owner_id], references: [user_id], map: "fk_workspaces_owner")
-  updated_by_user profiles?               @relation("workspaces_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspaces_updated_by")
+  id               String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at       DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime?               @db.Timestamptz(6)
+  created_by       String?                 @db.Uuid
+  updated_by       String?                 @db.Uuid
+  name             String                  @db.VarChar(255)
+  slug             String                  @unique(map: "uk_workspaces_slug") @db.VarChar(255)
+  description      String?
+  logo_url         String?                 @db.VarChar(500)
+  visibility       WorkspaceVisibility     @default(PRIVATE)
+  is_active        Boolean                 @default(true)
+  owner_id         String                  @db.Uuid
+  labels           labels[]
+  usage            model_usage[]
+  projects         projects[]
+  prompts          prompt[]
+  teams            teams[]
+  vector_documents vector_documents[]
+  invitations      workspace_invitations[]
+  members          workspace_members[]
+  settings         workspace_settings?
+  created_by_user  profiles?               @relation("workspaces_created_by_to_profiles", fields: [created_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspaces_created_by")
+  owner            profiles                @relation(fields: [owner_id], references: [user_id], map: "fk_workspaces_owner")
+  updated_by_user  profiles?               @relation("workspaces_updated_by_to_profiles", fields: [updated_by], references: [user_id], onDelete: NoAction, onUpdate: NoAction, map: "fk_workspaces_updated_by")
 
   @@index([created_at(sort: Desc)], map: "idx_workspaces_created_at")
   @@index([name(ops: raw("gin_trgm_ops"))], map: "idx_workspaces_name_trgm", type: Gin)
@@ -832,6 +687,28 @@ model ticket_dependencies {
 
   @@id([ticket_id, depends_on_ticket_id])
   @@index([depends_on_ticket_id], map: "idx_ticket_dependencies_depends_on")
+  @@schema("bibz-agile")
+}
+
+model vector_documents {
+  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  created_at    DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime              @default(now()) @db.Timestamptz(6)
+  content       String
+  embedding     Unsupported("vector")
+  source_table  String                @db.VarChar(100)
+  source_id     Int
+  workspace_id  String                @db.Uuid
+  project_id    Int?
+  document_type String?               @db.VarChar(100)
+  metadata      Json?                 @default("{}")
+  projects      projects?             @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_vector_documents_project")
+  workspaces    workspaces            @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_vector_documents_workspace")
+
+  @@index([project_id], map: "idx_vector_documents_project_id")
+  @@index([source_table, source_id], map: "idx_vector_documents_source")
+  @@index([workspace_id], map: "idx_vector_documents_workspace_id")
+  @@index([embedding])
   @@schema("bibz-agile")
 }
 

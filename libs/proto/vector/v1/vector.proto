@@ -1,0 +1,171 @@
+syntax = "proto3";
+
+package vector.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Entity change event for vector processing
+message EntityChangeEvent {
+  string source_table = 1;
+  string source_id = 2;
+  string workspace_id = 3;
+  string project_id = 4;
+  string operation = 5; // CREATE, UPDATE, DELETE
+  google.protobuf.Timestamp timestamp = 6;
+}
+
+// Vector document representation
+message VectorDocument {
+  string id = 1;
+  string content = 2;
+  repeated float embedding = 3;
+  string source_table = 4;
+  string source_id = 5;
+  string workspace_id = 6;
+  string project_id = 7;
+  string document_type = 8;
+  string metadata = 9; // JSON string for flexible metadata
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+// Search result with similarity score
+message VectorSearchResult {
+  VectorDocument document = 1;
+  float similarity_score = 2;
+}
+
+// Requests and Responses for entity processing
+message ProcessEntityRequest {
+  EntityChangeEvent event = 1;
+}
+
+message ProcessEntityResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message RemoveEntityRequest {
+  EntityChangeEvent event = 1;
+}
+
+message RemoveEntityResponse {
+  bool success = 1;
+  string message = 2;
+  int32 affected_entities = 3;
+}
+
+// Requests and Responses for vector operations
+message CreateVectorDocumentRequest {
+  VectorDocument document = 1;
+}
+
+message CreateVectorDocumentResponse {
+  VectorDocument document = 1;
+}
+
+message GetVectorDocumentRequest {
+  string id = 1;
+}
+
+message GetVectorDocumentResponse {
+  VectorDocument document = 1;
+}
+
+message UpdateVectorDocumentRequest {
+  string id = 1;
+  VectorDocument document = 2;
+}
+
+message UpdateVectorDocumentResponse {
+  VectorDocument document = 1;
+}
+
+message DeleteVectorDocumentRequest {
+  string source_table = 1;
+  string source_id = 2;
+  string workspace_id = 3;
+}
+
+message DeleteVectorDocumentResponse {
+  bool success = 1;
+}
+
+// Search requests and responses
+message SearchVectorRequest {
+  string query = 1;
+  string workspace_id = 2;
+  string project_id = 3;
+  repeated string document_types = 4;
+  int32 limit = 5;
+  float similarity_threshold = 6;
+}
+
+message SearchVectorResponse {
+  repeated VectorSearchResult results = 1;
+  int32 total_count = 2;
+}
+
+message SearchSimilarRequest {
+  string source_table = 1;
+  string source_id = 2;
+  string workspace_id = 3;
+  int32 limit = 4;
+  float similarity_threshold = 5;
+}
+
+message SearchSimilarResponse {
+  repeated VectorSearchResult results = 1;
+}
+
+// Embedding generation requests
+message GenerateEmbeddingRequest {
+  string content = 1;
+  string entity_type = 2;
+  string entity_id = 3;
+  string workspace_id = 4;
+}
+
+message GenerateEmbeddingResponse {
+  repeated float embedding = 1;
+  int32 dimensions = 2;
+}
+
+// Health and monitoring
+message GetHealthRequest {}
+
+message GetHealthResponse {
+  string status = 1;
+  string service = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message GetMetricsRequest {}
+
+message GetMetricsResponse {
+  string metrics = 1; // JSON string with performance metrics
+}
+
+// Service definition
+service VectorService {
+  // Entity processing operations
+  rpc ProcessEntity (ProcessEntityRequest) returns (ProcessEntityResponse);
+  rpc RemoveEntity (RemoveEntityRequest) returns (RemoveEntityResponse);
+  
+  // Vector document operations
+  rpc CreateVectorDocument (CreateVectorDocumentRequest) returns (CreateVectorDocumentResponse);
+  rpc GetVectorDocument (GetVectorDocumentRequest) returns (GetVectorDocumentResponse);
+  rpc UpdateVectorDocument (UpdateVectorDocumentRequest) returns (UpdateVectorDocumentResponse);
+  rpc DeleteVectorDocument (DeleteVectorDocumentRequest) returns (DeleteVectorDocumentResponse);
+  
+  // Search operations
+  rpc SearchVector (SearchVectorRequest) returns (SearchVectorResponse);
+  rpc SearchSimilar (SearchSimilarRequest) returns (SearchSimilarResponse);
+  
+  // Embedding operations
+  rpc GenerateEmbedding (GenerateEmbeddingRequest) returns (GenerateEmbeddingResponse);
+  
+  // Health and monitoring
+  rpc GetHealth (GetHealthRequest) returns (GetHealthResponse);
+  rpc GetMetrics (GetMetricsRequest) returns (GetMetricsResponse);
+}

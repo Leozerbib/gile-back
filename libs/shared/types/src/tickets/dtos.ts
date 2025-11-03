@@ -108,21 +108,6 @@ export class UpdateTicketDto {
 
   @ApiProperty({ example: "b3fb243f-8368-47aa-bcc7-072f049db8af", description: "Assignee user ID", required: false })
   assigned_to?: string;
-
-  @ApiProperty({ example: "PRO-0024", description: "Ticket number", required: false })
-  ticket_number?: string;
-
-  @ApiProperty({ example: 94, description: "Parent ticket ID", required: false })
-  parent_ticket_id?: number | null;
-
-  @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Task IDs", required: false })
-  task_ids?: number[];
-
-  @ApiProperty({ type: [Number], example: [4, 3, 2], description: "Label IDs", required: false })
-  label_ids?: number[];
-
-  @ApiProperty({ type: [Number], example: [5, 6], description: "Ticket dependency IDs (tickets this one depends on)", required: false })
-  dependency_ticket_ids?: number[];
 }
 
 export class TicketOverview {

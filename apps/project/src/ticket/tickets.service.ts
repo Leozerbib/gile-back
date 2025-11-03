@@ -526,21 +526,6 @@ export class TicketsService {
         dto.sprint_id = undefined;
       }
 
-      if (dto.parent_ticket_id) {
-        const parent = await this.prisma.tickets.findUnique({
-          where: { id: dto.parent_ticket_id },
-          select: { id: true, project_id: true },
-        });
-        if (!parent) {
-          throw new RpcException({ code: status.NOT_FOUND, message: `Parent ticket with ID "${dto.parent_ticket_id}" not found` });
-        }
-        if (parent.project_id !== existingTicket.project_id) {
-          throw new RpcException({ code: status.INTERNAL, message: "Parent ticket does not belong to the same project" });
-        }
-      } else if (dto.parent_ticket_id === 0) {
-        dto.parent_ticket_id = undefined;
-      }
-
       // Process DTO to handle date conversion and remove fields that shouldn't be directly updated
       const processedDto = { ...dto };
 
@@ -548,11 +533,6 @@ export class TicketsService {
       if (processedDto.due_date && typeof processedDto.due_date === "string") {
         processedDto.due_date = new Date(processedDto.due_date);
       }
-
-      // Remove fields that are handled separately or shouldn't be in updateData
-      delete processedDto.task_ids;
-      delete processedDto.label_ids;
-      delete processedDto.dependency_ticket_ids;
 
       // Create update data excluding non-updatable fields
       const updateData: Prisma.ticketsUpdateInput = {
@@ -566,113 +546,6 @@ export class TicketsService {
         // Ensure project relation is maintained (if needed)
       };
 
-      // Handle task_tickets updates with fetch-compare-update logic
-      if (dto.task_ids !== undefined) {
-        const existingTaskIds = await this.prisma.task_tickets
-          .findMany({
-            where: { ticket_id: ticketId },
-            select: { task_id: true },
-          })
-          .then(tasks => tasks.map(t => t.task_id));
-
-        const newTaskIds = dto.task_ids || [];
-        const tasksToAdd = newTaskIds.filter(id => !existingTaskIds.includes(id));
-        const tasksToRemove = existingTaskIds.filter(id => !newTaskIds.includes(id));
-
-        // Remove tasks that are no longer needed
-        if (tasksToRemove.length > 0) {
-          await this.prisma.task_tickets.deleteMany({
-            where: {
-              ticket_id: ticketId,
-              task_id: { in: tasksToRemove },
-            },
-          });
-        }
-
-        // Add new tasks
-        if (tasksToAdd.length > 0) {
-          await this.prisma.task_tickets.createMany({
-            data: tasksToAdd.map(taskId => ({ ticket_id: ticketId, task_id: taskId })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
-      // Handle ticket_dependencies updates with fetch-compare-update logic
-      if (dto.dependency_ticket_ids !== undefined || dto.parent_ticket_id !== undefined) {
-        const existingDepIds = await this.prisma.ticket_dependencies
-          .findMany({
-            where: { ticket_id: ticketId },
-            select: { depends_on_ticket_id: true },
-          })
-          .then(deps => deps.map(d => d.depends_on_ticket_id));
-
-        const deps = new Set<number>();
-        if (Array.isArray(dto.dependency_ticket_ids)) {
-          dto.dependency_ticket_ids.forEach(d => deps.add(d));
-        }
-        if (typeof dto.parent_ticket_id === "number" && dto.parent_ticket_id > 0) {
-          deps.add(dto.parent_ticket_id);
-        }
-
-        const newDepIds = Array.from(deps);
-        const depsToAdd = newDepIds.filter(id => !existingDepIds.includes(id));
-        const depsToRemove = existingDepIds.filter(id => !newDepIds.includes(id));
-
-        // Remove dependencies that are no longer needed
-        if (depsToRemove.length > 0) {
-          await this.prisma.ticket_dependencies.deleteMany({
-            where: {
-              ticket_id: ticketId,
-              depends_on_ticket_id: { in: depsToRemove },
-            },
-          });
-        }
-
-        // Add new dependencies
-        if (depsToAdd.length > 0) {
-          await this.prisma.ticket_dependencies.createMany({
-            data: depsToAdd.map(depId => ({ ticket_id: ticketId, depends_on_ticket_id: depId })),
-            skipDuplicates: true,
-          });
-        }
-      }
-
-      // Handle label updates with fetch-compare-update logic
-      if (dto.label_ids !== undefined) {
-        const existingLabelIds = await this.prisma.ticket_labels
-          .findMany({
-            where: { ticket_id: ticketId },
-            select: { label_id: true },
-          })
-          .then(labels => labels.map(l => l.label_id));
-
-        const newLabelIds = dto.label_ids || [];
-        const labelsToAdd = newLabelIds.filter(id => !existingLabelIds.includes(id));
-        const labelsToRemove = existingLabelIds.filter(id => !newLabelIds.includes(id));
-
-        // Remove labels that are no longer needed
-        if (labelsToRemove.length > 0) {
-          await this.prisma.ticket_labels.deleteMany({
-            where: {
-              ticket_id: ticketId,
-              label_id: { in: labelsToRemove },
-            },
-          });
-        }
-
-        // Add new labels
-        if (labelsToAdd.length > 0) {
-          await this.prisma.ticket_labels.createMany({
-            data: labelsToAdd.map(labelId => ({ ticket_id: ticketId, label_id: labelId, created_by: userId })),
-            skipDuplicates: true,
-          });
-        }
-      }
-      console.log("existingTicket", existingTicket);
-      console.log("dto", dto);
-      console.log("updateData", updateData);
-console.log("user", userId);
       const updatedTicket = await this.prisma.tickets.update({
         where: { id: ticketId },
         data: updateData,
@@ -816,6 +689,383 @@ console.log("user", userId);
         }
 
         throw new RpcException({ code: status.INTERNAL, message: "Unable to delete ticket: " + error.message });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Upsert (create/update) dependency tickets for a given ticket
+   *
+   * @param ticketId ID of the ticket to update dependencies for
+   * @param dependencyTicketIds List of dependency ticket IDs to associate
+   * @param userId ID of the user performing the operation
+   * @returns Success status
+   * @throws NotFoundException If the ticket doesn't exist
+   * @throws UnauthorizedException If the user doesn't have permissions
+   */
+  async upsertDependencyTickets(ticketId: number, dependencyTicketIds: number[], userId: string): Promise<boolean> {
+    await this.loggerClient.log({
+      level: "debug",
+      service: "project",
+      func: "tickets.upsertDependencyTickets",
+      message: `Upserting dependency tickets for ticket ${ticketId}`,
+      data: { ticketId, dependencyTicketIds, userId },
+    });
+
+    if (Number.isNaN(ticketId)) {
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid ticket identifier" });
+    }
+
+    try {
+      // Verify ticket exists
+      const existingTicket = await this.prisma.tickets.findUnique({
+        where: { id: ticketId },
+        select: { id: true, project_id: true },
+      });
+
+      if (!existingTicket) {
+        throw new RpcException({ code: status.NOT_FOUND, message: `Ticket with ID "${ticketId}" not found` });
+      }
+
+      // TODO: Add workspace access validation
+
+      await this.prisma.$transaction(async tx => {
+        // Remove existing dependencies
+        await tx.ticket_dependencies.deleteMany({
+          where: { ticket_id: ticketId },
+        });
+
+        // Add new dependencies
+        if (dependencyTicketIds && dependencyTicketIds.length > 0) {
+          for (const depId of dependencyTicketIds) {
+            // Verify that the dependency ticket exists
+            const dependencyTicket = await tx.tickets.findUnique({
+              where: { id: depId },
+              select: { id: true },
+            });
+
+            if (dependencyTicket) {
+              await tx.ticket_dependencies.create({
+                data: {
+                  ticket_id: ticketId,
+                  depends_on_ticket_id: depId,
+                },
+              });
+            } else {
+              await this.loggerClient.log({
+                level: "warn",
+                service: "project",
+                func: "tickets.upsertDependencyTickets",
+                message: `Dependency ticket with ID ${depId} not found, skipping`,
+                data: { ticketId, depId },
+              });
+            }
+          }
+        }
+      });
+
+      await this.loggerClient.log({
+        level: "info",
+        service: "project",
+        func: "tickets.upsertDependencyTickets",
+        message: `Dependency tickets updated successfully for ticket ${ticketId}`,
+        data: { ticketId, count: dependencyTicketIds.length },
+      });
+
+      return true;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        await this.loggerClient.log({
+          level: "error",
+          service: "project",
+          func: "tickets.upsertDependencyTickets",
+          message: "Error upserting dependency tickets",
+          data: { error: error.message, ticketId, dependencyTicketIds, userId },
+        });
+
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to update dependency tickets: " + error.message });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Upsert (create/update) labels for a given ticket
+   *
+   * @param ticketId ID of the ticket to update labels for
+   * @param labelIds List of label IDs to associate
+   * @param userId ID of the user performing the operation
+   * @returns Success status
+   * @throws NotFoundException If the ticket doesn't exist
+   * @throws UnauthorizedException If the user doesn't have permissions
+   */
+  async upsertTicketLabels(ticketId: number, labelIds: number[], userId: string): Promise<boolean> {
+    await this.loggerClient.log({
+      level: "debug",
+      service: "project",
+      func: "tickets.upsertTicketLabels",
+      message: `Upserting labels for ticket ${ticketId}`,
+      data: { ticketId, labelIds, userId },
+    });
+
+    if (Number.isNaN(ticketId)) {
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid ticket identifier" });
+    }
+
+    try {
+      // Verify ticket exists
+      const existingTicket = await this.prisma.tickets.findUnique({
+        where: { id: ticketId },
+        select: { id: true, project_id: true },
+      });
+
+      if (!existingTicket) {
+        throw new RpcException({ code: status.NOT_FOUND, message: `Ticket with ID "${ticketId}" not found` });
+      }
+
+      // TODO: Add workspace access validation
+
+      await this.prisma.$transaction(async tx => {
+        // Remove existing labels
+        await tx.ticket_labels.deleteMany({
+          where: { ticket_id: ticketId },
+        });
+
+        // Add new labels
+        if (labelIds && labelIds.length > 0) {
+          for (const labelId of labelIds) {
+            // Verify that the label exists
+            const label = await tx.labels.findUnique({
+              where: { id: labelId },
+              select: { id: true },
+            });
+
+            if (label) {
+              await tx.ticket_labels.create({
+                data: {
+                  ticket_id: ticketId,
+                  label_id: labelId,
+                  created_by: userId,
+                },
+              });
+            } else {
+              await this.loggerClient.log({
+                level: "warn",
+                service: "project",
+                func: "tickets.upsertTicketLabels",
+                message: `Label with ID ${labelId} not found, skipping`,
+                data: { ticketId, labelId },
+              });
+            }
+          }
+        }
+      });
+
+      await this.loggerClient.log({
+        level: "info",
+        service: "project",
+        func: "tickets.upsertTicketLabels",
+        message: `Labels updated successfully for ticket ${ticketId}`,
+        data: { ticketId, count: labelIds.length },
+      });
+
+      return true;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        await this.loggerClient.log({
+          level: "error",
+          service: "project",
+          func: "tickets.upsertTicketLabels",
+          message: "Error upserting ticket labels",
+          data: { error: error.message, ticketId, labelIds, userId },
+        });
+
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to update ticket labels: " + error.message });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Assign a ticket to a user
+   *
+   * @param ticketId ID of the ticket to assign
+   * @param assignedToUserId ID of the user to assign the ticket to
+   * @param userId ID of the user performing the operation
+   * @returns Success status
+   * @throws NotFoundException If the ticket doesn't exist
+   * @throws UnauthorizedException If the user doesn't have permissions
+   */
+  async assignTicket(ticketId: number, assignedToUserId: string, userId: string): Promise<boolean> {
+    await this.loggerClient.log({
+      level: "debug",
+      service: "project",
+      func: "tickets.assignTicket",
+      message: `Assigning ticket ${ticketId} to user ${assignedToUserId}`,
+      data: { ticketId, assignedToUserId, userId },
+    });
+
+    if (Number.isNaN(ticketId)) {
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid ticket identifier" });
+    }
+
+    if (!assignedToUserId || !assignedToUserId.trim()) {
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Assigned user ID is required" });
+    }
+
+    try {
+      // Verify ticket exists
+      const existingTicket = await this.prisma.tickets.findUnique({
+        where: { id: ticketId },
+        select: { id: true, project_id: true, assigned_to: true },
+      });
+
+      if (!existingTicket) {
+        throw new RpcException({ code: status.NOT_FOUND, message: `Ticket with ID "${ticketId}" not found` });
+      }
+
+      // Verify the assigned user exists
+      const assignedUser = await this.prisma.profiles.findUnique({
+        where: { user_id: assignedToUserId },
+        select: { user_id: true },
+      });
+
+      if (!assignedUser) {
+        throw new RpcException({ code: status.NOT_FOUND, message: `User with ID "${assignedToUserId}" not found` });
+      }
+
+      // TODO: Add workspace access validation
+
+      // Update ticket assignment
+      await this.prisma.tickets.update({
+        where: { id: ticketId },
+        data: {
+          assigned_to: assignedToUserId,
+          updated_by: userId,
+          updated_at: new Date(),
+        },
+      });
+
+      await this.loggerClient.log({
+        level: "info",
+        service: "project",
+        func: "tickets.assignTicket",
+        message: `Ticket ${ticketId} assigned successfully to user ${assignedToUserId}`,
+        data: { ticketId, assignedToUserId, previousAssignee: existingTicket.assigned_to },
+      });
+
+      return true;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        await this.loggerClient.log({
+          level: "error",
+          service: "project",
+          func: "tickets.assignTicket",
+          message: "Error assigning ticket",
+          data: { error: error.message, ticketId, assignedToUserId, userId },
+        });
+
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to assign ticket: " + error.message });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Assign a ticket to a sprint
+   *
+   * @param ticketId ID of the ticket to assign
+   * @param sprintId ID of the sprint to assign the ticket to (null to remove from sprint)
+   * @param userId ID of the user performing the operation
+   * @returns Success status
+   * @throws NotFoundException If the ticket or sprint doesn't exist
+   * @throws UnauthorizedException If the user doesn't have permissions
+   */
+  async assignTicketToSprint(ticketId: number, sprintId: number | null, userId: string): Promise<boolean> {
+    await this.loggerClient.log({
+      level: "debug",
+      service: "project",
+      func: "tickets.assignTicketToSprint",
+      message: `Assigning ticket ${ticketId} to sprint ${sprintId}`,
+      data: { ticketId, sprintId, userId },
+    });
+
+    if (Number.isNaN(ticketId)) {
+      throw new RpcException({ code: status.INVALID_ARGUMENT, message: "Invalid ticket identifier" });
+    }
+
+    try {
+      // Verify ticket exists
+      const existingTicket = await this.prisma.tickets.findUnique({
+        where: { id: ticketId },
+        select: { id: true, project_id: true, sprint_id: true },
+      });
+
+      if (!existingTicket) {
+        throw new RpcException({ code: status.NOT_FOUND, message: `Ticket with ID "${ticketId}" not found` });
+      }
+
+      // If sprintId is provided (not null), verify the sprint exists and belongs to the same project
+      if (sprintId !== null && sprintId !== 0) {
+        const sprint = await this.prisma.sprints.findUnique({
+          where: { id: sprintId },
+          select: { id: true, project_id: true },
+        });
+
+        if (!sprint) {
+          throw new RpcException({ code: status.NOT_FOUND, message: `Sprint with ID "${sprintId}" not found` });
+        }
+
+        if (sprint.project_id !== existingTicket.project_id) {
+          throw new RpcException({ code: status.FAILED_PRECONDITION, message: "Sprint does not belong to the same project as the ticket" });
+        }
+      }
+
+      // TODO: Add workspace access validation
+
+      // Update ticket sprint assignment
+      await this.prisma.tickets.update({
+        where: { id: ticketId },
+        data: {
+          sprint_id: sprintId === null || sprintId === 0 ? null : sprintId,
+          updated_by: userId,
+          updated_at: new Date(),
+        },
+      });
+
+      await this.loggerClient.log({
+        level: "info",
+        service: "project",
+        func: "tickets.assignTicketToSprint",
+        message: `Ticket ${ticketId} assigned successfully to sprint ${sprintId}`,
+        data: { ticketId, sprintId, previousSprint: existingTicket.sprint_id },
+      });
+
+      return true;
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        await this.loggerClient.log({
+          level: "error",
+          service: "project",
+          func: "tickets.assignTicketToSprint",
+          message: "Error assigning ticket to sprint",
+          data: { error: error.message, ticketId, sprintId, userId },
+        });
+
+        throw new RpcException({ code: status.INTERNAL, message: "Unable to assign ticket to sprint: " + error.message });
       }
       throw error;
     }

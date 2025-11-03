@@ -126,4 +126,96 @@ export class TicketsController {
 
     return { success: result };
   }
+
+  @GrpcMethod("Tickets", "UpsertDependencyTickets")
+  async upsertDependencyTickets(data: { user_id: string; ticket_id: number; dependency_ticket_ids: number[] }): Promise<{ success: boolean }> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "tickets.grpc.upsertDependencyTickets",
+      message: `gRPC UpsertDependencyTickets request for ticket id ${data.ticket_id}`,
+      data,
+    });
+
+    const result = await this.ticketsService.upsertDependencyTickets(data.ticket_id, data.dependency_ticket_ids, data.user_id);
+
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "tickets.grpc.upsertDependencyTickets",
+      message: `gRPC UpsertDependencyTickets response for ticket id ${data.ticket_id}`,
+      data: { result, count: data.dependency_ticket_ids.length },
+    });
+
+    return { success: result };
+  }
+
+  @GrpcMethod("Tickets", "UpsertTicketLabels")
+  async upsertTicketLabels(data: { user_id: string; ticket_id: number; label_ids: number[] }): Promise<{ success: boolean }> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "tickets.grpc.upsertTicketLabels",
+      message: `gRPC UpsertTicketLabels request for ticket id ${data.ticket_id}`,
+      data,
+    });
+
+    const result = await this.ticketsService.upsertTicketLabels(data.ticket_id, data.label_ids, data.user_id);
+
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "tickets.grpc.upsertTicketLabels",
+      message: `gRPC UpsertTicketLabels response for ticket id ${data.ticket_id}`,
+      data: { result, count: data.label_ids.length },
+    });
+
+    return { success: result };
+  }
+
+  @GrpcMethod("Tickets", "AssignTicket")
+  async assignTicket(data: { user_id: string; ticket_id: number; assigned_to_user_id: string }): Promise<{ success: boolean }> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "tickets.grpc.assignTicket",
+      message: `gRPC AssignTicket request for ticket id ${data.ticket_id}`,
+      data,
+    });
+
+    const result = await this.ticketsService.assignTicket(data.ticket_id, data.assigned_to_user_id, data.user_id);
+
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "tickets.grpc.assignTicket",
+      message: `gRPC AssignTicket response for ticket id ${data.ticket_id}`,
+      data: { result, assignedTo: data.assigned_to_user_id },
+    });
+
+    return { success: result };
+  }
+
+  @GrpcMethod("Tickets", "AssignTicketToSprint")
+  async assignTicketToSprint(data: { user_id: string; ticket_id: number; sprint_id: number }): Promise<{ success: boolean }> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "tickets.grpc.assignTicketToSprint",
+      message: `gRPC AssignTicketToSprint request for ticket id ${data.ticket_id}`,
+      data,
+    });
+
+    const result = await this.ticketsService.assignTicketToSprint(data.ticket_id, data.sprint_id, data.user_id);
+
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "tickets.grpc.assignTicketToSprint",
+      message: `gRPC AssignTicketToSprint response for ticket id ${data.ticket_id}`,
+      data: { result, sprintId: data.sprint_id },
+    });
+
+    return { success: result };
+  }
 }

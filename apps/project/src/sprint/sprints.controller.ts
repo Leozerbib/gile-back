@@ -171,4 +171,73 @@ export class SprintsController {
 
     return { success };
   }
+
+  @GrpcMethod("SprintsService", "GetLast")
+  async getLast(data: { projectId: number; userId: string }): Promise<SprintDto> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.grpc.getLast",
+      message: `gRPC GetLast sprint request for project ${data.projectId}`,
+      data,
+    });
+
+    const sprint = await this.sprintsService.getLast(data.projectId, data.userId);
+
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.grpc.getLast",
+      message: `gRPC GetLast sprint response for project ${data.projectId}`,
+      data: { sprintId: sprint?.id, version: sprint?.version },
+    });
+
+    return sprint;
+  }
+
+  @GrpcMethod("SprintsService", "StartSprint")
+  async startSprint(data: { sprintId: number; projectId: number; userId: string }): Promise<SprintDto> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.grpc.startSprint",
+      message: `gRPC StartSprint request for sprint ${data.sprintId}`,
+      data,
+    });
+
+    const sprint = await this.sprintsService.startSprint(data.sprintId, data.projectId, data.userId);
+
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.grpc.startSprint",
+      message: `gRPC StartSprint response for sprint ${data.sprintId}`,
+      data: { sprintId: sprint?.id, status: sprint?.status },
+    });
+
+    return sprint;
+  }
+
+  @GrpcMethod("SprintsService", "CompleteSprint")
+  async completeSprint(data: { sprintId: number; projectId: number; userId: string }): Promise<SprintDto> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.grpc.completeSprint",
+      message: `gRPC CompleteSprint request for sprint ${data.sprintId}`,
+      data,
+    });
+
+    const sprint = await this.sprintsService.completeSprint(data.sprintId, data.projectId, data.userId);
+
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.grpc.completeSprint",
+      message: `gRPC CompleteSprint response for sprint ${data.sprintId}`,
+      data: { sprintId: sprint?.id, status: sprint?.status },
+    });
+
+    return sprint;
+  }
 }

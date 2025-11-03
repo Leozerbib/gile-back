@@ -493,4 +493,232 @@ export class SprintsService {
       throw error;
     }
   }
+
+  /**
+   * Get the last sprint for a project
+   * Returns version, start/end dates, and actual start/end dates
+   */
+  async getLast(projectId: number, userId: string): Promise<SprintDto> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.getLast",
+      message: `Fetching last sprint for project ${projectId}`,
+      data: { projectId, userId },
+    });
+
+    try {
+      // Validate project exists and user has access
+      await this.projectsService.getById(projectId, userId);
+
+      const sprint = await this.prisma.sprints.findFirst({
+        where: { project_id: projectId },
+        orderBy: [{ version: "desc" }, { created_at: "desc" }],
+        include: {
+          project: { select: { id: true, name: true, slug: true } },
+          created_by_user: { select: { user_id: true, username: true, avatar_url: true } },
+          updated_by_user: { select: { user_id: true, username: true, avatar_url: true } },
+        },
+      });
+
+      if (!sprint) {
+        await this.logger.log({
+          level: "warn",
+          service: "project",
+          func: "sprints.getLast",
+          message: `No sprint found for project ${projectId}`,
+          data: { projectId, userId },
+        });
+        throw new RpcException({ code: status.NOT_FOUND, message: "No sprint found for this project" });
+      }
+
+      await this.logger.log({
+        level: "info",
+        service: "project",
+        func: "sprints.getLast",
+        message: `Last sprint found successfully`,
+        data: { sprintId: sprint.id, version: sprint.version, projectId, userId },
+      });
+
+      return plainToInstance(SprintDto, sprint);
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      if (error instanceof Error) {
+        await this.logger.log({
+          level: "error",
+          service: "project",
+          func: "sprints.getLast",
+          message: `Failed to get last sprint: ${error.message}`,
+          data: { projectId, userId, error: error.message },
+        });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Start a sprint
+   * Sets status to ACTIVE, sets start_date if not set, and sets actual_start_date to now
+   */
+  async startSprint(sprintId: number, projectId: number, userId: string): Promise<SprintDto> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.startSprint",
+      message: `Starting sprint ${sprintId}`,
+      data: { sprintId, projectId, userId },
+    });
+
+    try {
+      // Validate project exists and user has access
+      await this.projectsService.getById(projectId, userId);
+
+      // Check if sprint exists and belongs to project
+      const existingSprint = await this.prisma.sprints.findFirst({
+        where: { id: sprintId, project_id: projectId },
+      });
+
+      if (!existingSprint) {
+        throw new RpcException({ code: status.NOT_FOUND, message: "Sprint not found for this project" });
+      }
+
+      // Check if sprint is already active or completed
+      if (existingSprint.status === SprintStatus.ACTIVE) {
+        throw new RpcException({ code: status.FAILED_PRECONDITION, message: "Sprint is already active" });
+      }
+
+      if (existingSprint.status === SprintStatus.COMPLETED) {
+        throw new RpcException({ code: status.FAILED_PRECONDITION, message: "Cannot start a completed sprint" });
+      }
+
+      const now = new Date();
+      const updateData: Prisma.sprintsUpdateInput = {
+        status: SprintStatus.ACTIVE,
+        actual_start_date: now,
+        updated_by_user: { connect: { user_id: userId } },
+      };
+
+      // Set start_date to now if not already set
+      if (!existingSprint.start_date) {
+        updateData.start_date = now;
+      }
+
+      const sprint = await this.prisma.sprints.update({
+        where: { id: sprintId },
+        data: updateData,
+        include: {
+          project: { select: { id: true, name: true, slug: true } },
+          created_by_user: { select: { user_id: true, username: true, avatar_url: true } },
+          updated_by_user: { select: { user_id: true, username: true, avatar_url: true } },
+        },
+      });
+
+      await this.logger.log({
+        level: "info",
+        service: "project",
+        func: "sprints.startSprint",
+        message: `Sprint ${sprintId} started successfully`,
+        data: { sprintId, projectId, userId, actualStartDate: sprint.actual_start_date },
+      });
+
+      return plainToInstance(SprintDto, sprint);
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        await this.logger.log({
+          level: "error",
+          service: "project",
+          func: "sprints.startSprint",
+          message: `Error starting sprint: ${error?.message}`,
+          data: { sprintId, projectId, userId, stack: error?.stack, code: error?.code },
+        });
+        throw new RpcException({ code: status.INTERNAL, message: "An error occurred while starting the sprint. Please try again." });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Complete a sprint
+   * Sets status to COMPLETED, sets end_date if not set, and sets actual_end_date to now
+   */
+  async completeSprint(sprintId: number, projectId: number, userId: string): Promise<SprintDto> {
+    await this.logger.log({
+      level: "info",
+      service: "project",
+      func: "sprints.completeSprint",
+      message: `Completing sprint ${sprintId}`,
+      data: { sprintId, projectId, userId },
+    });
+
+    try {
+      // Validate project exists and user has access
+      await this.projectsService.getById(projectId, userId);
+
+      // Check if sprint exists and belongs to project
+      const existingSprint = await this.prisma.sprints.findFirst({
+        where: { id: sprintId, project_id: projectId },
+      });
+
+      if (!existingSprint) {
+        throw new RpcException({ code: status.NOT_FOUND, message: "Sprint not found for this project" });
+      }
+
+      // Check if sprint is already completed
+      if (existingSprint.status === SprintStatus.COMPLETED) {
+        throw new RpcException({ code: status.FAILED_PRECONDITION, message: "Sprint is already completed" });
+      }
+
+      const now = new Date();
+      const updateData: Prisma.sprintsUpdateInput = {
+        status: SprintStatus.COMPLETED,
+        actual_end_date: now,
+        updated_by_user: { connect: { user_id: userId } },
+      };
+
+      // Set end_date to now if not already set
+      if (!existingSprint.end_date) {
+        updateData.end_date = now;
+      }
+
+      const sprint = await this.prisma.sprints.update({
+        where: { id: sprintId },
+        data: updateData,
+        include: {
+          project: { select: { id: true, name: true, slug: true } },
+          created_by_user: { select: { user_id: true, username: true, avatar_url: true } },
+          updated_by_user: { select: { user_id: true, username: true, avatar_url: true } },
+        },
+      });
+
+      await this.logger.log({
+        level: "info",
+        service: "project",
+        func: "sprints.completeSprint",
+        message: `Sprint ${sprintId} completed successfully`,
+        data: { sprintId, projectId, userId, actualEndDate: sprint.actual_end_date },
+      });
+
+      return plainToInstance(SprintDto, sprint);
+    } catch (error) {
+      if (error instanceof RpcException) {
+        throw error;
+      }
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        await this.logger.log({
+          level: "error",
+          service: "project",
+          func: "sprints.completeSprint",
+          message: `Error completing sprint: ${error?.message}`,
+          data: { sprintId, projectId, userId, stack: error?.stack, code: error?.code },
+        });
+        throw new RpcException({ code: status.INTERNAL, message: "An error occurred while completing the sprint. Please try again." });
+      }
+      throw error;
+    }
+  }
 }
